@@ -31,7 +31,8 @@ from IPython.core.inputtransformer2 import TransformerManager
 from packaging.version import parse
 from qtpy import QT_VERSION
 from qtpy.compat import to_qvariant
-from qtpy.QtCore import QEvent, QRegExp, Qt, QTimer, QUrl, Signal, Slot
+from qtpy.QtCore import (
+    QEvent, QRegularExpression, Qt, QTimer, QUrl, Signal, Slot)
 from qtpy.QtGui import (QColor, QCursor, QFont, QKeySequence, QPaintEvent,
                         QPainter, QMouseEvent, QTextCursor, QDesktopServices,
                         QKeyEvent, QTextDocument, QTextFormat, QTextOption,
@@ -42,9 +43,9 @@ from spyder_kernels.utils.dochelpers import getobj
 
 
 # Local imports
-from spyder.api.panel import Panel
 from spyder.config.base import _, running_under_pytest
 from spyder.plugins.editor.api.decoration import TextDecoration
+from spyder.plugins.editor.api.panel import Panel
 from spyder.plugins.editor.extensions import (CloseBracketsExtension,
                                               CloseQuotesExtension,
                                               DocstringWriterExtension,
@@ -579,7 +580,9 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
              self.writer_docstring.write_docstring_for_shortcut),
             ('editor', 'autoformatting', self.format_document_or_range),
             ('array_builder', 'enter array inline', self.enter_array_inline),
-            ('array_builder', 'enter array table', self.enter_array_table)
+            ('array_builder', 'enter array table', self.enter_array_table),
+            ('editor', 'scroll line down', self.scroll_line_down),
+            ('editor', 'scroll line up', self.scroll_line_up)
             )
 
         shortcuts = []
@@ -1269,6 +1272,18 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
             self.setTextCursor(cursor)
         self.remove_selected_text()
 
+    # ---- Scrolling
+    # -------------------------------------------------------------------------
+    def scroll_line_down(self):
+        """Scroll the editor down by one step."""
+        vsb = self.verticalScrollBar()
+        vsb.setValue(vsb.value() + vsb.singleStep())
+
+    def scroll_line_up(self):
+        """Scroll the editor up by one step."""
+        vsb = self.verticalScrollBar()
+        vsb.setValue(vsb.value() - vsb.singleStep())
+
     # ---- Find occurrences
     # -------------------------------------------------------------------------
     def __find_first(self, text):
@@ -1277,7 +1292,9 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         cursor = self.textCursor()
         # Scanning whole document
         cursor.movePosition(QTextCursor.Start)
-        regexp = QRegExp(r"\b%s\b" % QRegExp.escape(text), Qt.CaseSensitive)
+        regexp = QRegularExpression(
+            r"\b%s\b" % QRegularExpression.escape(text)
+        )
         cursor = self.document().find(regexp, cursor, flags)
         self.__find_first_pos = cursor.position()
         return cursor
@@ -1285,7 +1302,9 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
     def __find_next(self, text, cursor):
         """Find next occurrence"""
         flags = QTextDocument.FindCaseSensitively|QTextDocument.FindWholeWords
-        regexp = QRegExp(r"\b%s\b" % QRegExp.escape(text), Qt.CaseSensitive)
+        regexp = QRegularExpression(
+            r"\b%s\b" % QRegularExpression.escape(text)
+        )
         cursor = self.document().find(regexp, cursor, flags)
         if cursor.position() != self.__find_first_pos:
             return cursor
@@ -2360,43 +2379,20 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
 
     def __remove_prefix(self, prefix, cursor, line_text):
         """Handle the removal of the prefix for a single line."""
-        start_with_space = line_text.startswith(' ')
-        if start_with_space:
-            left_spaces = self.__even_number_of_spaces(line_text)
-        else:
-            left_spaces = False
-        if start_with_space:
-            right_number_spaces = self.__number_of_spaces(line_text, group=1)
-        else:
-            right_number_spaces = self.__number_of_spaces(line_text)
+        cursor.movePosition(QTextCursor.Right,
+                            QTextCursor.MoveAnchor,
+                            line_text.find(prefix))
         # Handle prefix remove for comments with spaces
         if (prefix.strip() and line_text.lstrip().startswith(prefix + ' ')
                 or line_text.startswith(prefix + ' ') and '#' in prefix):
             cursor.movePosition(QTextCursor.Right,
-                                QTextCursor.MoveAnchor,
-                                line_text.find(prefix))
-            if (right_number_spaces == 1
-                    and (left_spaces or not start_with_space)
-                    or (not start_with_space and right_number_spaces % 2 != 0)
-                    or (left_spaces and right_number_spaces % 2 != 0)):
-                # Handle inserted '# ' with the count of the number of spaces
-                # at the right and left of the prefix.
-                cursor.movePosition(QTextCursor.Right,
-                                    QTextCursor.KeepAnchor, len(prefix + ' '))
-            else:
-                # Handle manual insertion of '#'
-                cursor.movePosition(QTextCursor.Right,
-                                    QTextCursor.KeepAnchor, len(prefix))
-            cursor.removeSelectedText()
+                                QTextCursor.KeepAnchor, len(prefix + ' '))
         # Check for prefix without space
         elif (prefix.strip() and line_text.lstrip().startswith(prefix)
                 or line_text.startswith(prefix)):
             cursor.movePosition(QTextCursor.Right,
-                                QTextCursor.MoveAnchor,
-                                line_text.find(prefix))
-            cursor.movePosition(QTextCursor.Right,
                                 QTextCursor.KeepAnchor, len(prefix))
-            cursor.removeSelectedText()
+        cursor.removeSelectedText()
 
     def __even_number_of_spaces(self, line_text, group=0):
         """
@@ -3091,7 +3087,7 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         block = cursor.block()
         pos = cursor.position() - block.position()  # relative pos within block
         layout = block.layout()
-        block_formats = layout.additionalFormats()
+        block_formats = layout.formats()
 
         if block_formats:
             # To easily grab current format for autoinsert_colons
@@ -3342,6 +3338,8 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         self.format_action.setEnabled(False)
 
         # Build menu
+        # TODO: Change to SpyderMenu when the editor is migrated to the new
+        # API
         self.menu = QMenu(self)
         actions_1 = [self.gotodef_action, self.inspect_current_object_action,
                      None, self.undo_action, self.redo_action, None,
@@ -3360,6 +3358,8 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
             add_actions(self.menu, actions)
 
         # Read-only context-menu
+        # TODO: Change to SpyderMenu when the editor is migrated to the new
+        # API
         self.readonly_menu = QMenu(self)
         add_actions(self.readonly_menu,
                     (self.copy_action, None, selectall_action,
@@ -3672,10 +3672,10 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         # Correctly handle completions when Backspace key is pressed.
         # We should not show the widget if deleting a space before a word.
         if key == Qt.Key_Backspace:
-            cursor.setPosition(pos - 1, QTextCursor.MoveAnchor)
+            cursor.setPosition(max(0, pos - 1), QTextCursor.MoveAnchor)
             cursor.select(QTextCursor.WordUnderCursor)
             prev_text = to_text_string(cursor.selectedText())
-            cursor.setPosition(pos - 1, QTextCursor.MoveAnchor)
+            cursor.setPosition(max(0, pos - 1), QTextCursor.MoveAnchor)
             cursor.setPosition(pos, QTextCursor.KeepAnchor)
             prev_char = cursor.selectedText()
             if prev_text == '' or prev_char in (u'\u2029', ' ', '\t'):
@@ -3683,7 +3683,7 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
 
         # Text might be after a dot '.'
         if text == '':
-            cursor.setPosition(pos - 1, QTextCursor.MoveAnchor)
+            cursor.setPosition(max(0, pos - 1), QTextCursor.MoveAnchor)
             cursor.select(QTextCursor.WordUnderCursor)
             text = to_text_string(cursor.selectedText())
             if text != '.':

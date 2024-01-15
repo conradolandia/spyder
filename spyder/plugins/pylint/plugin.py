@@ -67,11 +67,14 @@ class Pylint(SpyderDockablePlugin, RunExecutor):
     def get_name():
         return _("Code Analysis")
 
-    def get_description(self):
-        return _("Run Code Analysis.")
+    @staticmethod
+    def get_description():
+        return _("Analyze code and view the results from both static and "
+                 "real-time analysis.")
 
-    def get_icon(self):
-        return self.create_icon("pylint")
+    @classmethod
+    def get_icon(cls):
+        return cls.create_icon("pylint")
 
     def on_initialize(self):
         widget = self.get_widget()
@@ -86,7 +89,7 @@ class Pylint(SpyderDockablePlugin, RunExecutor):
         # Run configuration
         self.executor_configuration = [
             {
-                'input_extension': 'py',
+                'input_extension': ['py'],
                 'context': {
                     'name': 'File'
                 },
@@ -94,7 +97,7 @@ class Pylint(SpyderDockablePlugin, RunExecutor):
                 'configuration_widget': None,
                 'requires_cwd': False,
                 'priority': 4
-            }
+            },
         ]
 
     @on_plugin_available(plugin=Plugins.Editor)
@@ -238,7 +241,7 @@ class Pylint(SpyderDockablePlugin, RunExecutor):
             if self.get_conf("save_before", True) and not editor.save():
                 return
 
-        if filename is None:
+        if filename is None or isinstance(filename, bool):
             filename = self.get_widget().get_filename()
 
         self.switch_to_plugin(force_focus=True)

@@ -149,7 +149,7 @@ class LSPMixin:
         self.format_on_save = False
         self.format_eventloop = QEventLoop(None)
         self.format_timer = QTimer(self)
-        self.__line_number_before_format = 0
+        self.__cursor_position_before_format = 0
 
         # Outline explorer
         self.oe_proxy = None
@@ -394,12 +394,7 @@ class LSPMixin:
         """Handle symbols response."""
         try:
             symbols = params["params"]
-            symbols = [] if symbols is None else symbols
-
-            if self.classfuncdropdown.isVisible():
-                self.classfuncdropdown.update_data(symbols)
-            else:
-                self.classfuncdropdown.set_data(symbols)
+            self._update_classfuncdropdown(symbols)
 
             if self.oe_proxy is not None:
                 self.oe_proxy.update_outline_info(symbols)
@@ -411,6 +406,15 @@ class LSPMixin:
             self.log_lsp_handle_errors("Error when processing symbols")
         finally:
             self.symbols_in_sync = True
+
+    def _update_classfuncdropdown(self, symbols):
+        """Update class/function dropdown."""
+        symbols = [] if symbols is None else symbols
+
+        if self.classfuncdropdown.isVisible():
+            self.classfuncdropdown.update_data(symbols)
+        else:
+            self.classfuncdropdown.set_data(symbols)
 
     # ---- Linting and didChange
     # -------------------------------------------------------------------------
@@ -976,7 +980,7 @@ class LSPMixin:
     @schedule_request(method=CompletionRequestTypes.DOCUMENT_FORMATTING)
     def format_document(self):
         """Format current document."""
-        self.__line_number_before_format = self.textCursor().blockNumber()
+        self.__cursor_position_before_format = self.textCursor().position()
 
         if not self.formatting_enabled:
             return
@@ -1014,7 +1018,7 @@ class LSPMixin:
     @schedule_request(method=CompletionRequestTypes.DOCUMENT_RANGE_FORMATTING)
     def format_document_range(self):
         """Format selected text."""
-        self.__line_number_before_format = self.textCursor().blockNumber()
+        self.__cursor_position_before_format = self.textCursor().position()
 
         if not self.range_formatting_enabled or not self.has_selected_text():
             return
@@ -1025,6 +1029,16 @@ class LSPMixin:
         start, end = self.get_selection_start_end()
         start_line, start_col = start
         end_line, end_col = end
+
+        # Remove empty trailing newline from multiline selection
+        if end_line > start_line and end_col == 0:
+            end_line -= 1
+
+        fmt_range = {
+            "start": {"line": start_line, "character": start_col},
+            "end": {"line": end_line, "character": end_col},
+        }
+
         using_spaces = self.indent_chars != "\t"
         tab_size = (
             len(self.indent_chars)
@@ -1032,10 +1046,6 @@ class LSPMixin:
             else self.tab_stop_width_spaces
         )
 
-        fmt_range = {
-            "start": {"line": start_line, "character": start_col},
-            "end": {"line": end_line, "character": end_col},
-        }
         params = {
             "file": self.filename,
             "range": fmt_range,
@@ -1179,16 +1189,15 @@ class LSPMixin:
             # End text insertion
             cursor.endEditBlock()
 
-            # Restore previous cursor line and center it.
+            # Restore previous cursor position and center it.
             # Fixes spyder-ide/spyder#19958
-            if self.__line_number_before_format < self.blockCount():
+            # Use QTextCursor.(position | setPosition) to restore the cursor
+            # position to be able to do it with any wrap mode.
+            # Fixes spyder-ide/spyder#20852
+            if self.__cursor_position_before_format:
                 self.moveCursor(QTextCursor.Start)
                 cursor = self.textCursor()
-                cursor.movePosition(
-                    QTextCursor.Down,
-                    QTextCursor.MoveAnchor,
-                    self.__line_number_before_format,
-                )
+                cursor.setPosition(self.__cursor_position_before_format)
                 self.setTextCursor(cursor)
                 self.centerCursor()
 

@@ -24,14 +24,16 @@ import io
 import re
 import sys
 import warnings
+from typing import Any, Callable, Optional
 
 # Third party imports
 from qtpy.compat import getsavefilename, to_qvariant
 from qtpy.QtCore import (
-    QAbstractTableModel, QItemSelectionModel, QModelIndex, Qt, Signal, Slot)
+    QAbstractTableModel, QItemSelectionModel, QModelIndex, Qt, QTimer, Signal,
+    Slot)
 from qtpy.QtGui import QColor, QKeySequence
 from qtpy.QtWidgets import (
-    QApplication, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit, QMenu,
+    QApplication, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
     QMessageBox, QPushButton, QTableView, QVBoxLayout, QWidget)
 from spyder_kernels.utils.lazymodules import (
     FakeObject, numpy as np, pandas as pd, PIL)
@@ -43,11 +45,11 @@ from spyder_kernels.utils.nsview import (
 )
 
 # Local imports
+from spyder.api.config.fonts import SpyderFontsMixin, SpyderFontType
 from spyder.api.config.mixins import SpyderConfigurationAccessor
+from spyder.api.widgets.menus import SpyderMenu
 from spyder.api.widgets.toolbars import SpyderToolbar
 from spyder.config.base import _, running_under_pytest
-from spyder.config.fonts import DEFAULT_SMALL_DELTA
-from spyder.config.gui import get_font
 from spyder.py3compat import (is_binary_string, to_text_string,
                               is_type_text_string)
 from spyder.utils.icon_manager import ima
@@ -128,7 +130,7 @@ class ProxyObject(object):
                 raise
 
 
-class ReadOnlyCollectionsModel(QAbstractTableModel):
+class ReadOnlyCollectionsModel(QAbstractTableModel, SpyderFontsMixin):
     """CollectionsEditor Read-Only Table Model"""
 
     sig_setting_data = Signal()
@@ -197,6 +199,7 @@ class ReadOnlyCollectionsModel(QAbstractTableModel):
             self._data = data = self.showndata = ProxyObject(data)
             if not self.names:
                 self.header0 = _("Attribute")
+
         if not isinstance(self._data, ProxyObject):
             if len(self.keys) > 1:
                 elements = _("elements")
@@ -206,17 +209,21 @@ class ReadOnlyCollectionsModel(QAbstractTableModel):
         else:
             data_type = get_type_string(data)
             self.title += data_type
+
         self.total_rows = len(self.keys)
         if self.total_rows > LARGE_NROWS:
             self.rows_loaded = ROWS_TO_LOAD
         else:
             self.rows_loaded = self.total_rows
+
         self.sig_setting_data.emit()
         self.set_size_and_type()
+
         if len(self.keys):
             # Needed to update search scores when
             # adding values to the namespace
             self.update_search_letters()
+
         self.reset()
 
     def set_size_and_type(self, start=None, stop=None):
@@ -420,6 +427,8 @@ class ReadOnlyCollectionsModel(QAbstractTableModel):
                 display = to_text_string(value)
             else:
                 display = value
+        if role == Qt.ToolTipRole:
+            return display
         if role == Qt.UserRole:
             if isinstance(value, NUMERIC_TYPES):
                 return to_qvariant(value)
@@ -440,7 +449,9 @@ class ReadOnlyCollectionsModel(QAbstractTableModel):
         elif role == Qt.BackgroundColorRole:
             return to_qvariant(self.get_bgcolor(index))
         elif role == Qt.FontRole:
-            return to_qvariant(get_font(font_size_delta=DEFAULT_SMALL_DELTA))
+            return to_qvariant(
+                self.get_font(SpyderFontType.MonospaceInterface)
+            )
         return to_qvariant()
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -460,9 +471,10 @@ class ReadOnlyCollectionsModel(QAbstractTableModel):
         # This method was implemented in CollectionsModel only, but to enable
         # tuple exploration (even without editing), this method was moved here
         if not index.isValid():
-            return Qt.ItemIsEnabled
-        return Qt.ItemFlags(int(QAbstractTableModel.flags(self, index) |
-                                Qt.ItemIsEditable))
+            return Qt.ItemFlag.ItemIsEnabled
+        return (
+            QAbstractTableModel.flags(self, index) | Qt.ItemFlag.ItemIsEditable
+        )
 
     def reset(self):
         self.beginResetModel()
@@ -618,6 +630,19 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
         self.horizontalHeader().sig_user_resized_section.connect(
             self.user_resize_columns)
 
+        # There is no need for us to show this header because we're not using
+        # it to show any information on it.
+        self.verticalHeader().hide()
+
+        # Delay editing values for a bit so that when users do a double click
+        # (the default behavior for editing since Spyder was created; now they
+        # only have to do a single click), our editor dialogs are focused.
+        self.__index_clicked = None
+        self._edit_value_timer = QTimer(self)
+        self._edit_value_timer.setInterval(100)
+        self._edit_value_timer.setSingleShot(True)
+        self._edit_value_timer.timeout.connect(self._edit_value)
+
     def setup_table(self):
         """Setup table"""
         self.horizontalHeader().setStretchLastSection(True)
@@ -697,7 +722,7 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
             icon=ima.icon('outline_explorer'),
             triggered=self.view_item)
 
-        menu = QMenu(self)
+        menu = SpyderMenu(self)
         self.menu_actions = [
             self.edit_action,
             self.copy_action,
@@ -721,7 +746,7 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
         ]
         add_actions(menu, self.menu_actions)
 
-        self.empty_ws_menu = QMenu(self)
+        self.empty_ws_menu = SpyderMenu(self)
         add_actions(
             self.empty_ws_menu,
             [self.insert_action, self.paste_action]
@@ -889,32 +914,47 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
             self.source_model.reset()
             self.sortByColumn(0, Qt.AscendingOrder)
 
+    def _edit_value(self):
+        self.edit(self.__index_clicked)
+
     def mousePressEvent(self, event):
         """Reimplement Qt method"""
         if event.button() != Qt.LeftButton:
             QTableView.mousePressEvent(self, event)
             return
+
         index_clicked = self.indexAt(event.pos())
         if index_clicked.isValid():
-            if index_clicked == self.currentIndex() \
-               and index_clicked in self.selectedIndexes():
+            if (
+                index_clicked == self.currentIndex()
+                and index_clicked in self.selectedIndexes()
+            ):
                 self.clearSelection()
             else:
-                QTableView.mousePressEvent(self, event)
+                row = index_clicked.row()
+                # TODO: Remove hard coded "Value" column number (3 here)
+                self.__index_clicked = index_clicked.child(row, 3)
+
+                # Wait for a bit to edit values so dialogs are focused on
+                # double clicks. That will preserve the way things worked in
+                # Spyder 5 for users that are accustomed to do double clicks.
+                self._edit_value_timer.start()
         else:
             self.clearSelection()
             event.accept()
 
     def mouseDoubleClickEvent(self, event):
         """Reimplement Qt method"""
-        index_clicked = self.indexAt(event.pos())
-        if index_clicked.isValid():
-            row = index_clicked.row()
-            # TODO: Remove hard coded "Value" column number (3 here)
-            index_clicked = index_clicked.child(row, 3)
-            self.edit(index_clicked)
+        # Make this event do nothing because variables are now edited with a
+        # single click.
+        pass
+
+    def mouseMoveEvent(self, event):
+        """Change cursor shape."""
+        if self.rowAt(event.y()) != -1:
+            self.setCursor(Qt.PointingHandCursor)
         else:
-            event.accept()
+            self.setCursor(Qt.ArrowCursor)
 
     def keyPressEvent(self, event):
         """Reimplement Qt methods"""
@@ -963,6 +1003,17 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
             self.sig_files_dropped.emit(urls)
         else:
             event.ignore()
+
+    def showEvent(self, event):
+        """Resize columns when the widget is shown."""
+        # This is probably the best we can do to adjust the columns width to
+        # their header contents at startup. However, it doesn't work for all
+        # fonts and font sizes and perhaps it depends on the user's screen dpi
+        # as well. See the discussion in
+        # https://github.com/spyder-ide/spyder/pull/20933#issuecomment-1585474443
+        # and the comments below for more details.
+        self.adjust_columns()
+        super().showEvent(event)
 
     def _deselect_index(self, index):
         """
@@ -1281,10 +1332,12 @@ class BaseTableView(QTableView, SpyderConfigurationAccessor):
 class CollectionsEditorTableView(BaseTableView):
     """CollectionsEditor table view"""
 
-    def __init__(self, parent, data, readonly=False, title="",
-                 names=False):
+    def __init__(self, parent, data, namespacebrowser=None,
+                 data_function: Optional[Callable[[], Any]] = None,
+                 readonly=False, title="", names=False):
         BaseTableView.__init__(self, parent)
         self.dictfilter = None
+        self.namespacebrowser = namespacebrowser
         self.readonly = readonly or isinstance(data, (tuple, set))
         CollectionsModelClass = (ReadOnlyCollectionsModel if self.readonly
                                  else CollectionsModel)
@@ -1297,7 +1350,9 @@ class CollectionsEditorTableView(BaseTableView):
         )
         self.model = self.source_model
         self.setModel(self.source_model)
-        self.delegate = CollectionsDelegate(self)
+        self.delegate = CollectionsDelegate(
+            self, namespacebrowser, data_function
+        )
         self.setItemDelegate(self.delegate)
 
         self.setup_table()
@@ -1385,10 +1440,7 @@ class CollectionsEditorTableView(BaseTableView):
     def plot(self, key, funcname):
         """Plot item"""
         data = self.source_model.get_data()
-        import spyder.pyplot as plt
-        plt.figure()
-        getattr(plt, funcname)(data[key])
-        plt.show()
+        self.namespacebrowser.plot(data[key], funcname)
 
     def imshow(self, key):
         """Show item's image"""
@@ -1412,14 +1464,19 @@ class CollectionsEditorTableView(BaseTableView):
 class CollectionsEditorWidget(QWidget):
     """Dictionary Editor Widget"""
 
-    def __init__(self, parent, data, readonly=False, title="", remote=False):
+    sig_refresh_requested = Signal()
+
+    def __init__(self, parent, data, namespacebrowser=None,
+                 data_function: Optional[Callable[[], Any]] = None,
+                 readonly=False, title="", remote=False):
         QWidget.__init__(self, parent)
         if remote:
-            self.editor = RemoteCollectionsEditorTableView(self, data,
-                                                           readonly)
+            self.editor = RemoteCollectionsEditorTableView(
+                self, data, readonly)
         else:
-            self.editor = CollectionsEditorTableView(self, data, readonly,
-                                                     title)
+            self.editor = CollectionsEditorTableView(
+                self, data, namespacebrowser, data_function, readonly, title
+            )
 
         toolbar = SpyderToolbar(parent=None, title='Editor toolbar')
         toolbar.setStyleSheet(str(PANES_TOOLBAR_STYLESHEET))
@@ -1428,8 +1485,19 @@ class CollectionsEditorWidget(QWidget):
             if item is not None:
                 toolbar.addAction(item)
 
+        self.refresh_action = create_action(
+            self,
+            text=_('Refresh'),
+            icon=ima.icon('refresh'),
+            tip=_('Refresh editor with current value of variable in console'),
+            triggered=lambda: self.sig_refresh_requested.emit()
+        )
+        toolbar.addAction(self.refresh_action)
+
         # Update the toolbar actions state
         self.editor.refresh_menu()
+        self.refresh_action.setEnabled(data_function is not None)
+
         layout = QVBoxLayout()
         layout.addWidget(toolbar)
         layout.addWidget(self.editor)
@@ -1447,7 +1515,8 @@ class CollectionsEditorWidget(QWidget):
 class CollectionsEditor(BaseDialog):
     """Collections Editor Dialog"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, namespacebrowser=None,
+                 data_function: Optional[Callable[[], Any]] = None):
         super().__init__(parent)
 
         # Destroying the C++ object right after closing the dialog box,
@@ -1456,6 +1525,8 @@ class CollectionsEditor(BaseDialog):
         # a segmentation fault on UNIX or an application crash on Windows
         self.setAttribute(Qt.WA_DeleteOnClose)
 
+        self.namespacebrowser = namespacebrowser
+        self.data_function = data_function
         self.data_copy = None
         self.widget = None
         self.btn_save_and_close = None
@@ -1486,9 +1557,11 @@ class CollectionsEditor(BaseDialog):
         if type(self.data_copy) != type(data):
             readonly = True
 
-        self.widget = CollectionsEditorWidget(self, self.data_copy,
-                                              title=title, readonly=readonly,
-                                              remote=remote)
+        self.widget = CollectionsEditorWidget(
+            self, self.data_copy, self.namespacebrowser, self.data_function,
+            title=title, readonly=readonly, remote=remote
+        )
+        self.widget.sig_refresh_requested.connect(self.refresh_editor)
         self.widget.editor.source_model.sig_setting_data.connect(
             self.save_and_close_enable)
         layout = QVBoxLayout()
@@ -1539,6 +1612,51 @@ class CollectionsEditor(BaseDialog):
         # already been destroyed, due to the Qt.WA_DeleteOnClose attribute
         return self.data_copy
 
+    def refresh_editor(self) -> None:
+        """
+        Refresh data in editor.
+        """
+        assert self.data_function is not None
+
+        if self.btn_save_and_close and self.btn_save_and_close.isEnabled():
+            if not self.ask_for_refresh_confirmation():
+                return
+
+        try:
+            new_value = self.data_function()
+        except (IndexError, KeyError):
+            QMessageBox.critical(
+                self,
+                _('Collection editor'),
+                _('The variable no longer exists.')
+            )
+            self.reject()
+            return
+
+        self.widget.set_data(new_value)
+        self.data_copy = new_value
+        if self.btn_save_and_close:
+            self.btn_save_and_close.setEnabled(False)
+        self.btn_close.setAutoDefault(True)
+        self.btn_close.setDefault(True)
+
+    def ask_for_refresh_confirmation(self) -> bool:
+        """
+        Ask user to confirm refreshing the editor.
+
+        This function is to be called if refreshing the editor would overwrite
+        changes that the user made previously. The function returns True if
+        the user confirms that they want to refresh and False otherwise.
+        """
+        message = _('Refreshing the editor will overwrite the changes that '
+                    'you made. Do you want to proceed?')
+        result = QMessageBox.question(
+            self,
+            _('Refresh collections editor?'),
+            message
+        )
+        return result == QMessageBox.Yes
+
 
 #==============================================================================
 # Remote versions of CollectionsDelegate and CollectionsEditorTableView
@@ -1546,8 +1664,8 @@ class CollectionsEditor(BaseDialog):
 class RemoteCollectionsDelegate(CollectionsDelegate):
     """CollectionsEditor Item Delegate"""
 
-    def __init__(self, parent=None):
-        CollectionsDelegate.__init__(self, parent)
+    def __init__(self, parent=None, namespacebrowser=None):
+        CollectionsDelegate.__init__(self, parent, namespacebrowser)
 
     def get_value(self, index):
         if index.isValid():
@@ -1561,6 +1679,38 @@ class RemoteCollectionsDelegate(CollectionsDelegate):
             name = source_index.model().keys[source_index.row()]
             self.parent().new_value(name, value)
 
+    def make_data_function(
+        self,
+        index: QModelIndex
+    ) -> Optional[Callable[[], Any]]:
+        """
+        Construct function which returns current value of data.
+
+        The returned function uses the associated console to retrieve the
+        current value of the variable. This is used to refresh editors created
+        from that variable.
+
+        Parameters
+        ----------
+        index : QModelIndex
+            Index of item whose current value is to be returned by the
+            function constructed here.
+
+        Returns
+        -------
+        Optional[Callable[[], Any]]
+            Function which returns the current value of the data, or None if
+            such a function cannot be constructed.
+        """
+        source_index = index.model().mapToSource(index)
+        name = source_index.model().keys[source_index.row()]
+        parent = self.parent()
+
+        def get_data():
+            return parent.get_value(name)
+
+        return get_data
+
 
 class RemoteCollectionsEditorTableView(BaseTableView):
     """DictEditor table view"""
@@ -1573,7 +1723,6 @@ class RemoteCollectionsEditorTableView(BaseTableView):
         self.shellwidget = shellwidget
         self.var_properties = {}
         self.dictfilter = None
-        self.delegate = None
         self.readonly = False
 
         self.source_model = CollectionsModel(
@@ -1596,7 +1745,7 @@ class RemoteCollectionsEditorTableView(BaseTableView):
 
         self.hideColumn(4)  # Column 4 for Score
 
-        self.delegate = RemoteCollectionsDelegate(self)
+        self.delegate = RemoteCollectionsDelegate(self, self.namespacebrowser)
         self.delegate.sig_free_memory_requested.connect(
             self.sig_free_memory_requested)
         self.delegate.sig_editor_creation_started.connect(

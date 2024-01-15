@@ -22,7 +22,7 @@ import time
 import traceback
 
 # Third party imports (qtpy)
-from qtpy.QtCore import QUrl, QTimer, Signal, Slot, QThread
+from qtpy.QtCore import QUrl, QTimer, Signal, Slot
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 
 # Local imports
@@ -36,7 +36,7 @@ from spyder.utils.image_path_manager import get_image_path
 from spyder.utils.installers import InstallerIPythonKernelError
 from spyder.utils.environ import RemoteEnvDialog
 from spyder.utils.palette import QStylePalette
-from spyder.utils.qthelpers import add_actions, DialogManager
+from spyder.utils.qthelpers import DialogManager
 from spyder.plugins.ipythonconsole import SpyderKernelError
 from spyder.plugins.ipythonconsole.utils.kernel_handler import (
     KernelConnectionState)
@@ -92,14 +92,14 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
                  config_options,
                  additional_options,
                  interpreter_versions,
-                 context_menu_actions=(),
                  menu_actions=None,
                  given_name=None,
                  give_focus=True,
                  options_button=None,
-                 handlers={},
+                 handlers=None,
                  initial_cwd=None,
-                 forcing_custom_interpreter=False):
+                 forcing_custom_interpreter=False,
+                 special_kernel=None):
         super(ClientWidget, self).__init__(parent)
         SaveHistoryMixin.__init__(self, get_conf_path('history.py'))
 
@@ -116,7 +116,6 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
         self.hostname = None
         self.show_elapsed_time = self.get_conf('show_elapsed_time')
         self.reset_warning = self.get_conf('show_reset_namespace_warning')
-        self.context_menu_actions = context_menu_actions
         self.options_button = options_button
         self.history = []
         self.allow_rename = True
@@ -136,7 +135,8 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
             additional_options=additional_options,
             interpreter_versions=interpreter_versions,
             handlers=handlers,
-            local_kernel=True
+            local_kernel=True,
+            special_kernel=special_kernel
         )
         self.infowidget = self.container.infowidget
         self.blank_page = self._create_blank_page()
@@ -410,10 +410,6 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
         self.shellwidget.executed.connect(
             self.sig_execution_state_changed)
 
-        # To show kernel restarted/died messages
-        self.shellwidget.sig_kernel_restarted_message.connect(
-            self.kernel_restarted_message)
-
         # To correctly change Matplotlib backend interactively
         self.shellwidget.executing.connect(
             self.shellwidget.change_mpl_backend)
@@ -479,6 +475,9 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
             self.shellwidget.hide()
             self.infowidget.show()
 
+        # Inform other plugins that the shell failed to start
+        self.shellwidget.sig_shellwidget_errored.emit(self.shellwidget)
+
         # Stop shellwidget
         self.shellwidget.shutdown()
 
@@ -504,7 +503,10 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
             "Note: Debugging will proceed. "
             "Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.",
             # Argument not expected error. See spyder-ide/spyder#19298
-            "The following argument was not expected"
+            "The following argument was not expected",
+            # Avoid showing error for kernel restarts after kernel dies when
+            # using an external interpreter
+            "conda.cli.main_run"
         ]
 
         return any([err in error for err in benign_errors])
@@ -536,12 +538,6 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
             return page_control
         else:
             return self.shellwidget._control
-
-    def add_actions_to_context_menu(self, menu):
-        """Add actions to IPython widget context menu"""
-        add_actions(menu, self.context_menu_actions)
-
-        return menu
 
     def set_font(self, font):
         """Set IPython widget's font"""
@@ -609,18 +605,11 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):
 
         # Reset shellwidget and print restart message
         self.shellwidget.reset(clear=True)
-        self.shellwidget.print_restart_message()
+        self.shellwidget._kernel_restarted_message(died=False)
 
     def print_fault(self, fault):
         """Print fault text."""
-        self.shellwidget._append_plain_text(
-            '\n' + fault, before_prompt=True)
-
-    @Slot(str)
-    def kernel_restarted_message(self, msg):
-        """Show kernel restarted/died messages."""
-        self.shellwidget._append_html("<br>%s<hr><br>" % msg,
-                                      before_prompt=False)
+        self.shellwidget._append_plain_text('\n' + fault, before_prompt=True)
 
     @Slot()
     def enter_array_inline(self):

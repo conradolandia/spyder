@@ -17,8 +17,8 @@ from qtpy.QtGui import QPainter, QColor, QCursor
 from qtpy.QtWidgets import (QStyle, QStyleOptionSlider, QApplication)
 
 # Local imports
-from spyder.api.panel import Panel
 from spyder.plugins.completion.api import DiagnosticSeverity
+from spyder.plugins.editor.api.panel import Panel
 from spyder.plugins.editor.utils.editor import is_block_safe
 
 
@@ -171,9 +171,19 @@ class ScrollFlagArea(Panel):
         """
         # The area in which the slider handle of the scrollbar may move.
         groove_rect = self.get_scrollbar_groove_rect()
-        # The scrollbar's scale factor ratio between pixel span height and
-        # value span height
-        scale_factor = groove_rect.height() / self.get_scrollbar_value_height()
+
+        # This is necessary to catch a possible error when the scrollbar
+        # has zero height.
+        # Fixes spyder-ide/spyder#21600
+        try:
+            # The scrollbar's scale factor ratio between pixel span height and
+            # value span height
+            scale_factor = (
+                groove_rect.height() / self.get_scrollbar_value_height()
+            )
+        except ZeroDivisionError:
+            scale_factor = 1
+
         # The vertical offset of the scroll flag area relative to the
         # top of the text editor.
         offset = groove_rect.y()
@@ -215,7 +225,17 @@ class ScrollFlagArea(Panel):
         }
         dict_flag_lists.update(self._dict_flag_list)
 
-        for flag_type in dict_flag_lists:
+        # The ability to reverse dictionaries was added in Python 3.8.
+        # Fixes spyder-ide/spyder#21286
+        if sys.version_info[:2] > (3, 7):
+            # This is necessary to paint find matches above errors and
+            # warnings.
+            # See spyder-ide/spyder#20970
+            dict_flag_lists_iter = reversed(dict_flag_lists)
+        else:
+            dict_flag_lists_iter = dict_flag_lists
+
+        for flag_type in dict_flag_lists_iter:
             painter.setBrush(self._facecolors[flag_type])
             painter.setPen(self._edgecolors[flag_type])
             if editor.verticalScrollBar().maximum() == 0:
