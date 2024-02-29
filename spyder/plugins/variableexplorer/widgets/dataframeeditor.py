@@ -64,7 +64,7 @@ from spyder.utils.qthelpers import (
     safe_disconnect)
 from spyder.plugins.variableexplorer.widgets.arrayeditor import get_idx_rect
 from spyder.plugins.variableexplorer.widgets.basedialog import BaseDialog
-from spyder.utils.palette import QStylePalette
+from spyder.utils.palette import SpyderPalette
 from spyder.utils.stylesheet import PANES_TOOLBAR_STYLESHEET
 
 
@@ -91,7 +91,7 @@ BACKGROUND_NUMBER_HUERANGE = 0.33  # (hue for smallest) minus (hue for largest)
 BACKGROUND_NUMBER_SATURATION = 0.7
 BACKGROUND_NUMBER_VALUE = 1.0
 BACKGROUND_NUMBER_ALPHA = 0.6
-BACKGROUND_NONNUMBER_COLOR = QStylePalette.COLOR_BACKGROUND_2
+BACKGROUND_NONNUMBER_COLOR = SpyderPalette.COLOR_BACKGROUND_2
 BACKGROUND_STRING_ALPHA = 0.05
 BACKGROUND_MISC_ALPHA = 0.3
 
@@ -1552,7 +1552,7 @@ class DataFrameLevelModel(QAbstractTableModel, SpyderFontsMixin):
     def __init__(self, model):
         super().__init__()
         self.model = model
-        self._background = QColor(QStylePalette.COLOR_BACKGROUND_2)
+        self._background = QColor(SpyderPalette.COLOR_BACKGROUND_2)
 
     def rowCount(self, index=None):
         """Get number of rows (number of levels for the header)."""
@@ -1637,7 +1637,7 @@ class DataFrameEditor(BaseDialog, SpyderConfigurationAccessor):
     def setup_and_check(self, data, title='') -> bool:
         """
         Setup editor.
-        
+
         It returns False if data is not supported, True otherwise. Supported
         types for data are DataFrame, Series and Index.
         """

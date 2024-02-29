@@ -34,7 +34,7 @@ from spyder.py3compat import to_text_string
 from spyder.utils import encoding, sourcecode
 from spyder.utils import syntaxhighlighters as sh
 from spyder.utils.misc import get_error_match
-from spyder.utils.palette import QStylePalette
+from spyder.utils.palette import SpyderPalette
 from spyder.widgets.arraybuilder import ArrayBuilderDialog
 
 
@@ -59,10 +59,10 @@ EOL_SYMBOLS = [
 
 class BaseEditMixin(object):
 
-    _PARAMETER_HIGHLIGHT_COLOR = QStylePalette.COLOR_ACCENT_4
-    _DEFAULT_TITLE_COLOR = QStylePalette.COLOR_ACCENT_4
-    _CHAR_HIGHLIGHT_COLOR = QStylePalette.COLOR_ACCENT_4
-    _DEFAULT_TEXT_COLOR = QStylePalette.COLOR_TEXT_2
+    _PARAMETER_HIGHLIGHT_COLOR = SpyderPalette.COLOR_ACCENT_4
+    _DEFAULT_TITLE_COLOR = SpyderPalette.COLOR_ACCENT_4
+    _CHAR_HIGHLIGHT_COLOR = SpyderPalette.COLOR_ACCENT_4
+    _DEFAULT_TEXT_COLOR = SpyderPalette.COLOR_TEXT_2
     _DEFAULT_LANGUAGE = 'python'
     _DEFAULT_MAX_LINES = 10
     _DEFAULT_MAX_WIDTH = 60
@@ -145,8 +145,8 @@ class BaseEditMixin(object):
         if id(widget) in self._styled_widgets:
             return
         self._styled_widgets.add(id(widget))
-        background = QStylePalette.COLOR_BACKGROUND_4
-        border = QStylePalette.COLOR_TEXT_4
+        background = SpyderPalette.COLOR_BACKGROUND_4
+        border = SpyderPalette.COLOR_TEXT_4
         name = widget.__class__.__name__
         widget.setObjectName(name)
         css = '''
@@ -305,8 +305,8 @@ class BaseEditMixin(object):
                 shortcut = self._get_inspect_shortcut()
                 if shortcut:
                     base_style = (
-                        f'background-color:{QStylePalette.COLOR_BACKGROUND_4};'
-                        f'color:{QStylePalette.COLOR_TEXT_1};'
+                        f'background-color:{SpyderPalette.COLOR_BACKGROUND_4};'
+                        f'color:{SpyderPalette.COLOR_TEXT_1};'
                         'font-size:11px;'
                     )
                     help_text = ''
@@ -323,7 +323,7 @@ class BaseEditMixin(object):
                 template += (
                     '<hr>'
                     '<div align="left">'
-                    f'<span style="color: {QStylePalette.COLOR_ACCENT_4};'
+                    f'<span style="color: {SpyderPalette.COLOR_ACCENT_4};'
                     'text-decoration:none;'
                     'font-family:"{font_family}";font-size:{size}pt;><i>'
                     ''.format(font_family=font_family,

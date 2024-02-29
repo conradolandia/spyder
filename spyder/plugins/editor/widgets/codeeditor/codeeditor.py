@@ -70,7 +70,7 @@ from spyder.utils import encoding, sourcecode
 from spyder.utils.clipboard_helper import CLIPBOARD_HELPER
 from spyder.utils.icon_manager import ima
 from spyder.utils import syntaxhighlighters as sh
-from spyder.utils.palette import SpyderPalette, QStylePalette
+from spyder.utils.palette import SpyderPalette
 from spyder.utils.qthelpers import (add_actions, create_action, file_uri,
                                     mimedata2url, start_file)
 from spyder.utils.vcs import get_git_remotes, remote_to_url
@@ -2060,7 +2060,7 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
             self.show_tooltip(
                 title=_("Code analysis"),
                 text='\n'.join(msglist),
-                title_color=QStylePalette.COLOR_ACCENT_4,
+                title_color=SpyderPalette.COLOR_ACCENT_4,
                 at_line=line_number,
                 with_html_format=True
             )
@@ -2216,7 +2216,7 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         self.show_tooltip(
             title=_("To do"),
             text=data.todo,
-            title_color=QStylePalette.COLOR_ACCENT_4,
+            title_color=SpyderPalette.COLOR_ACCENT_4,
             at_line=line_number,
         )
 
@@ -2998,7 +2998,7 @@ class CodeEditor(LSPMixin, TextEditBaseWidget):
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.insertText(firstline)
         cursor.endEditBlock()
-        
+
     # ---- Kill ring handlers
     # Taken from Jupyter's QtConsole
     # Copyright (c) 2001-2015, IPython Development Team
