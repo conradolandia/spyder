@@ -19,9 +19,9 @@ import sys
 from spyder.plugins.toolbar.api import ApplicationToolbars
 from spyder.config.base import CHECK_ALL, EXCLUDED_NAMES
 from spyder.config.utils import IMPORT_EXT
-from spyder.config.appearance import APPEARANCE
 from spyder.plugins.editor.utils.findtasks import TASKS_PATTERN
 from spyder.utils.introspection.module_completion import PREFERRED_MODULES
+from spyder.utils.theme_manager import ThemeManager
 
 
 # =============================================================================
@@ -343,7 +343,6 @@ DEFAULTS = [
               'show_hscrollbar': True,
               'max_recent_projects': 10,
               'visible_if_project_open': True,
-              'date_column': False,
               'single_click_to_open': False,
               'show_hidden': True,
               'size_column': False,
@@ -617,7 +616,7 @@ DEFAULTS = [
               # -- Find --
               'find_in_files/find in files': 'Alt+Shift+F',
               }),
-            ('appearance', APPEARANCE),
+            ('appearance', ThemeManager.APPEARANCE),
             ]
 
 

@@ -13,9 +13,21 @@ Palettes for QDarkStyle theme used in Spyder.
 # Standard library imports
 from collections import OrderedDict
 
+from colorsystem import (
+    Error,
+    GroupDark,
+    GroupLight,
+    Logos,
+    Primary,
+    Secondary,
+    Success,
+    Syntax,
+    SyntaxLight,
+    Warning,
+)
+
 # Local imports
 from spyder.config.gui import is_dark_interface
-from .colorsystem import Primary, Secondary, Success, Error, Warning, GroupDark, GroupLight, Syntax, SyntaxLight, Logos
 
 # Theme ID
 THEME_ID = "qdarkstyle"
@@ -24,36 +36,37 @@ THEME_ID = "qdarkstyle"
 # ---- Base Palette class
 # =============================================================================
 
+
 class Palette(object):
     """Base palette mixin."""
 
     ID = None
 
     # Color
-    COLOR_BACKGROUND_1 = ''
-    COLOR_BACKGROUND_2 = ''
-    COLOR_BACKGROUND_3 = ''
-    COLOR_BACKGROUND_4 = ''
-    COLOR_BACKGROUND_5 = ''
-    COLOR_BACKGROUND_6 = ''
+    COLOR_BACKGROUND_1 = ""
+    COLOR_BACKGROUND_2 = ""
+    COLOR_BACKGROUND_3 = ""
+    COLOR_BACKGROUND_4 = ""
+    COLOR_BACKGROUND_5 = ""
+    COLOR_BACKGROUND_6 = ""
 
-    COLOR_TEXT_1 = ''
-    COLOR_TEXT_2 = ''
-    COLOR_TEXT_3 = ''
-    COLOR_TEXT_4 = ''
+    COLOR_TEXT_1 = ""
+    COLOR_TEXT_2 = ""
+    COLOR_TEXT_3 = ""
+    COLOR_TEXT_4 = ""
 
-    COLOR_ACCENT_1 = ''
-    COLOR_ACCENT_2 = ''
-    COLOR_ACCENT_3 = ''
-    COLOR_ACCENT_4 = ''
-    COLOR_ACCENT_5 = ''
+    COLOR_ACCENT_1 = ""
+    COLOR_ACCENT_2 = ""
+    COLOR_ACCENT_3 = ""
+    COLOR_ACCENT_4 = ""
+    COLOR_ACCENT_5 = ""
 
-    COLOR_DISABLED = ''
+    COLOR_DISABLED = ""
 
     OPACITY_TOOLTIP = 0
 
     # Size
-    SIZE_BORDER_RADIUS = '4px'
+    SIZE_BORDER_RADIUS = "4px"
 
     # Borders
     BORDER_1 = "1px solid $COLOR_BACKGROUND_1"
@@ -74,43 +87,43 @@ class Palette(object):
     def to_dict(cls, colors_only=False):
         """Convert variables to dictionary."""
         order = [
-            'ID',
-            'COLOR_BACKGROUND_6',
-            'COLOR_BACKGROUND_5',
-            'COLOR_BACKGROUND_4',
-            'COLOR_BACKGROUND_2',
-            'COLOR_BACKGROUND_3',
-            'COLOR_BACKGROUND_1',
-            'COLOR_TEXT_1',
-            'COLOR_TEXT_2',
-            'COLOR_TEXT_3',
-            'COLOR_TEXT_4',
-            'COLOR_ACCENT_1',
-            'COLOR_ACCENT_2',
-            'COLOR_ACCENT_3',
-            'COLOR_ACCENT_4',
-            'COLOR_ACCENT_5',
-            'COLOR_DISABLED',
-            'OPACITY_TOOLTIP',
-            'SIZE_BORDER_RADIUS',
-            'BORDER_1',
-            'BORDER_2',
-            'BORDER_3',
-            'BORDER_SELECTION_3',
-            'BORDER_SELECTION_2',
-            'BORDER_SELECTION_1',
-            'W_STATUS_BAR_BACKGROUND_COLOR',
-            'PATH_RESOURCES',
+            "ID",
+            "COLOR_BACKGROUND_6",
+            "COLOR_BACKGROUND_5",
+            "COLOR_BACKGROUND_4",
+            "COLOR_BACKGROUND_2",
+            "COLOR_BACKGROUND_3",
+            "COLOR_BACKGROUND_1",
+            "COLOR_TEXT_1",
+            "COLOR_TEXT_2",
+            "COLOR_TEXT_3",
+            "COLOR_TEXT_4",
+            "COLOR_ACCENT_1",
+            "COLOR_ACCENT_2",
+            "COLOR_ACCENT_3",
+            "COLOR_ACCENT_4",
+            "COLOR_ACCENT_5",
+            "COLOR_DISABLED",
+            "OPACITY_TOOLTIP",
+            "SIZE_BORDER_RADIUS",
+            "BORDER_1",
+            "BORDER_2",
+            "BORDER_3",
+            "BORDER_SELECTION_3",
+            "BORDER_SELECTION_2",
+            "BORDER_SELECTION_1",
+            "W_STATUS_BAR_BACKGROUND_COLOR",
+            "PATH_RESOURCES",
         ]
         dic = OrderedDict()
         for var in order:
             value = getattr(cls, var)
 
-            if var == 'ID':
+            if var == "ID":
                 value = "'{}'".format(value)
 
             if colors_only:
-                if not var.startswith('COLOR'):
+                if not var.startswith("COLOR"):
                     value = None
 
             if value:
@@ -126,11 +139,13 @@ class Palette(object):
     @staticmethod
     def from_dict(class_values, class_name="FromDictPalette"):
         """Return palette class definition from dictionary."""
-        return type(class_name, (Palette, ), class_values)
+        return type(class_name, (Palette,), class_values)
+
 
 # =============================================================================
 # ---- QDarkStyle palettes
 # =============================================================================
+
 
 class SpyderPaletteDark(Palette):
     """Dark palette for QDarkStyle."""
@@ -237,7 +252,7 @@ class SpyderPaletteDark(Palette):
     OPACITY_TOOLTIP = 230
 
     # Border radius
-    SIZE_BORDER_RADIUS = '4px'
+    SIZE_BORDER_RADIUS = "4px"
 
     # Borders
     BORDER_1 = "1px solid $COLOR_BACKGROUND_1"
@@ -360,7 +375,7 @@ class SpyderPaletteLight(Palette):
     OPACITY_TOOLTIP = 230
 
     # Border radius
-    SIZE_BORDER_RADIUS = '4px'
+    SIZE_BORDER_RADIUS = "4px"
 
     # Borders
     BORDER_1 = "1px solid $COLOR_BACKGROUND_1"
