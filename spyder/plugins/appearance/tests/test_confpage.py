@@ -42,7 +42,7 @@ def test_change_ui_theme_and_color_scheme(config_dialog, mocker, qtbot):
 
     # Assert default UI theme is 'automatic' and interface is dark. The other
     # tests below depend on this.
-    assert widget.get_option('ui_theme') == 'automatic'
+    assert widget.get_option('ui_mode') == 'automatic'
     assert widget.is_dark_interface()
 
     # Change to another dark color scheme

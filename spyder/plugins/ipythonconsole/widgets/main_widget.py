@@ -851,9 +851,9 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
                 value
             )
 
-    @on_conf_change(section='appearance', option=['selected', 'ui_theme'])
+    @on_conf_change(section='appearance', option=['selected', 'ui_mode'])
     def change_clients_color_scheme(self, option, value):
-        if option == 'ui_theme':
+        if option == 'ui_mode':
             value = self.get_conf('selected', section='appearance')
 
         for idx, client in enumerate(self.clients):

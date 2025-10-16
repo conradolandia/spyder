@@ -44,7 +44,7 @@ class ThemeManager:
     def is_dark_interface():
         from spyder.config.manager import CONF
 
-        return CONF.get("appearance", "ui_theme") == "dark"
+        return CONF.get("appearance", "ui_mode") == "dark"
 
     @staticmethod
     def get_available_themes():

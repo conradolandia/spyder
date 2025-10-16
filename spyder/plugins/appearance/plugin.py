@@ -54,7 +54,7 @@ class Appearance(SpyderPluginV2):
         #    quite resource intensive.
         # 2. Notifications for this option are restored when creating the
         #    config page.
-        self.disable_conf('ui_theme')
+        self.disable_conf('ui_mode')
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def register_preferences(self):

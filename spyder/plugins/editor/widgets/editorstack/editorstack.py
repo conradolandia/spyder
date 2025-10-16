@@ -784,9 +784,9 @@ class EditorStack(QWidget, SpyderWidgetMixin):
     def on_help_connection_change(self, value):
         self.set_help_enabled(value)
 
-    @on_conf_change(section='appearance', option=['selected', 'ui_theme'])
+    @on_conf_change(section='appearance', option=['selected', 'ui_mode'])
     def on_color_scheme_change(self, option, value):
-        if option == 'ui_theme':
+        if option == 'ui_mode':
             value = self.get_conf('selected', section='appearance')
 
         logger.debug(f"Set color scheme to {value}")

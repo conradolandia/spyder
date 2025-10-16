@@ -124,11 +124,11 @@ def is_dark_font_color(color_scheme):
 
 
 def is_dark_interface():
-    ui_theme = CONF.get('appearance', 'ui_theme')
+    ui_mode = CONF.get('appearance', 'ui_mode')
     color_scheme = CONF.get('appearance', 'selected')
-    if ui_theme == 'dark':
+    if ui_mode == 'dark':
         return True
-    elif ui_theme == 'automatic':
+    elif ui_mode == 'automatic':
         if not is_dark_font_color(color_scheme):
             return True
         else:

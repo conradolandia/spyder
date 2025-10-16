@@ -667,14 +667,14 @@ class MainWindow(QMainWindow, SpyderMainWindowMixin, SpyderShortcutsMixin):
         # and remove this import. Help plugin should take care of it
         from spyder.plugins.help.utils.sphinxify import CSS_PATH, DARK_CSS_PATH
 
-        ui_theme = self.get_conf('ui_theme', section='appearance')
+        ui_mode = self.get_conf('ui_mode', section='appearance')
         color_scheme = self.get_conf('selected', section='appearance')
 
-        if ui_theme == 'dark':
+        if ui_mode == 'dark':
             css_path = DARK_CSS_PATH
-        elif ui_theme == 'light':
+        elif ui_mode == 'light':
             css_path = CSS_PATH
-        elif ui_theme == 'automatic':
+        elif ui_mode == 'automatic':
             if not is_dark_font_color(color_scheme):
                 css_path = DARK_CSS_PATH
             else:

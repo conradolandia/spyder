@@ -55,7 +55,7 @@ class AppearanceConfigPage(PluginConfigPage):
 
         # Notifications for this option are disabled when the plugin is
         # initialized, so we need to restore them here.
-        CONF.restore_notifications(section='appearance', option='ui_theme')
+        CONF.restore_notifications(section='appearance', option='ui_mode')
 
     def setup_page(self):
         names = self.get_option("names")
@@ -77,7 +77,7 @@ class AppearanceConfigPage(PluginConfigPage):
         ui_theme_combo = self.create_combobox(
             _('Interface theme'),
             ui_theme_choices,
-            'ui_theme',
+            'ui_mode',
             restart=True
         )
         self.ui_combobox = ui_theme_combo.combobox
@@ -322,31 +322,31 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        ui_theme = self.get_option('ui_theme')
+        ui_mode = self.get_option('ui_mode')
         mismatch = self.color_scheme_and_ui_theme_mismatch(
-            self.current_scheme, ui_theme)
+            self.current_scheme, ui_mode)
 
-        if ui_theme == 'automatic':
+        if ui_mode == 'automatic':
             if mismatch:
                 # Ask for a restart
-                self.changed_options.add('ui_theme')
+                self.changed_options.add('ui_mode')
             else:
                 # Don't ask for a restart
-                if 'ui_theme' in self.changed_options:
-                    self.changed_options.remove('ui_theme')
+                if 'ui_mode' in self.changed_options:
+                    self.changed_options.remove('ui_mode')
         else:
-            if 'ui_theme' in self.changed_options:
+            if 'ui_mode' in self.changed_options:
                 if not mismatch:
                     # Don't ask for a restart
-                    self.changed_options.remove('ui_theme')
+                    self.changed_options.remove('ui_mode')
             else:
                 if mismatch:
                     # Ask for a restart
-                    self.changed_options.add('ui_theme')
+                    self.changed_options.add('ui_mode')
 
         # We need to restore notifications for these options so they can be
         # changed when the user selects other values for them.
-        for option in ['selected', 'ui_theme']:
+        for option in ['selected', 'ui_mode']:
             CONF.restore_notifications(section='appearance', option=option)
 
         self.update_combobox()
@@ -622,7 +622,7 @@ class AppearanceConfigPage(PluginConfigPage):
         """
         return dark_color(SpyderPalette.COLOR_BACKGROUND_1)
 
-    def color_scheme_and_ui_theme_mismatch(self, color_scheme, ui_theme):
+    def color_scheme_and_ui_theme_mismatch(self, color_scheme, ui_mode):
         """
         Detect if there is a mismatch between the current color scheme and
         UI theme.
@@ -632,21 +632,21 @@ class AppearanceConfigPage(PluginConfigPage):
         color_scheme: str
             Name of one of Spyder's color schemes. For instance: 'Zenburn' or
             'Monokai'.
-        ui_theme: str
+        ui_mode: str
             Name of the one of Spyder's interface themes. This can 'automatic',
             'dark' or 'light'.
         """
         # A dark color scheme is characterized by a light font and viceversa
         is_dark_color_scheme = not is_dark_font_color(color_scheme)
-        if ui_theme == 'automatic':
+        if ui_mode == 'automatic':
             mismatch = (
                 (self.is_dark_interface() and not is_dark_color_scheme) or
                 (not self.is_dark_interface() and is_dark_color_scheme)
             )
         else:
             mismatch = (
-                (self.is_dark_interface() and ui_theme == 'light') or
-                (not self.is_dark_interface() and ui_theme == 'dark')
+                (self.is_dark_interface() and ui_mode == 'light') or
+                (not self.is_dark_interface() and ui_mode == 'dark')
             )
 
         return mismatch
@@ -656,13 +656,13 @@ class AppearanceConfigPage(PluginConfigPage):
         Check if it's necessary to notify plugins to update their color scheme.
         """
         ui_theme_map = {0: 'automatic', 1: 'light', 2: 'dark'}
-        ui_theme = ui_theme_map[self.current_ui_theme_index]
+        ui_mode = ui_theme_map[self.current_ui_theme_index]
         mismatch = self.color_scheme_and_ui_theme_mismatch(
-            self.current_scheme, ui_theme)
+            self.current_scheme, ui_mode)
 
         # We don't need to apply the selected color scheme if there's a
         # mismatch between it and the UI theme. Instead, we only we need to ask
         # for a restart.
         if mismatch:
-            for option in ['selected', 'ui_theme']:
+            for option in ['selected', 'ui_mode']:
                 CONF.disable_notifications(section='appearance', option=option)
