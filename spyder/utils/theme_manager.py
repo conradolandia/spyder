@@ -9,6 +9,7 @@ Theme manager for Spyder's new theming system.
 """
 
 # Standard library imports
+import ast
 import sys
 from pathlib import Path
 
@@ -20,8 +21,10 @@ from spyder.config.fonts import MEDIUM, MONOSPACE
 from spyder.plugins.help.utils.sphinxify import CSS_PATH
 
 # Theme configuration
+THEMES_DIR = Path(pkg_resources.resource_filename("spyder.utils", "themes"))
 SELECTED_THEME = "solarized"  # Hardcoded theme selection for now
 SELECTED_UI_MODE = "dark"  # Hardcoded variant selection for now
+SELECTED = f"{SELECTED_THEME}/{SELECTED_UI_MODE}"
 
 
 class ThemeManager:
@@ -29,9 +32,7 @@ class ThemeManager:
 
     def __init__(self):
         # Use package resources to find themes directory
-        self._themes_dir = Path(
-            pkg_resources.resource_filename("spyder.utils", "themes")
-        )
+        self._themes_dir = THEMES_DIR
         self._current_theme = None
         self._current_palette = None
         self._current_stylesheet = None
@@ -39,13 +40,20 @@ class ThemeManager:
         self._loaded_resource_modules = {}  # Keep references to resource modules
         self._current_ui_mode = None  # Track current interface mode
 
-    def get_available_themes(self):
+    @staticmethod
+    def is_dark_interface():
+        from spyder.config.manager import CONF
+
+        return CONF.get("appearance", "ui_theme") == "dark"
+
+    @staticmethod
+    def get_available_themes():
         """Get list of available themes."""
-        if not self._themes_dir.exists():
+        if not THEMES_DIR.exists():
             return []
 
         themes = []
-        for theme_dir in self._themes_dir.iterdir():
+        for theme_dir in THEMES_DIR.iterdir():
             if theme_dir.is_dir() and (theme_dir / "palette.py").exists():
                 themes.append(theme_dir.name)
             else:
@@ -56,10 +64,58 @@ class ThemeManager:
 
         return sorted(themes)
 
-    def is_dark_interface(self):
-        from spyder.config.manager import CONF
+    @staticmethod
+    def get_theme_modes(theme_name):
+        """
+        Get available UI modes for a specific theme.
 
-        return CONF.get("appearance", "ui_theme") == "dark"
+        Parameters
+        ----------
+        theme_name : str
+            Name of the theme
+
+        Returns
+        -------
+        list of str
+            List of available mode IDs (e.g., ['dark', 'light'])
+        """
+        palette_file = THEMES_DIR / theme_name / "palette.py"
+        modes = []
+
+        try:
+            with open(palette_file, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+
+            # Iterate through top-level class definitions
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef):
+                    # Look for ID attribute in class body
+                    for item in node.body:
+                        if (
+                            isinstance(item, ast.Assign)
+                            and len(item.targets) == 1
+                            and isinstance(item.targets[0], ast.Name)
+                            and item.targets[0].id == "ID"
+                            and isinstance(item.value, ast.Constant)
+                        ):
+                            mode_id = item.value.value
+                            if mode_id in ("dark", "light"):
+                                modes.append(mode_id)
+                            break
+        except Exception:
+            pass
+
+        return modes
+
+    @staticmethod
+    def get_available_theme_variants():
+        """Get list of available theme/mode combinations."""
+        variants = []
+        for theme_name in ThemeManager.get_available_themes():
+            for mode in ThemeManager.get_theme_modes(theme_name):
+                variants.append(f"{theme_name}/{mode}")
+
+        return sorted(variants)
 
     def load_theme(self, theme_name, ui_mode=None):
         """
@@ -214,6 +270,7 @@ class ThemeManager:
         return self._current_stylesheet
 
 
+# Global appearance object
 APPEARANCE = {
     "css_path": CSS_PATH,
     "icon_theme": "spyder 3",
@@ -237,15 +294,12 @@ APPEARANCE = {
     "monospace_app_font/size": 0,
     "monospace_app_font/italic": False,
     "monospace_app_font/bold": False,
-    "ui_mode": "automatic",
-    # Themes
-    "themes": [
-        ThemeManager.get_available_themes()
-    ],
-    "selected": f"{SELECTED_THEME}/{SELECTED_UI_MODE}",
+    "ui_mode": SELECTED_UI_MODE,
+    # Themes (was 'names')
+    "themes": ThemeManager.get_available_theme_variants(),
+    "selected": SELECTED,
 }
 
 
 # Global theme manager instance
 theme_manager = ThemeManager()
-

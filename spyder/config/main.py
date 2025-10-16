@@ -21,7 +21,7 @@ from spyder.config.base import CHECK_ALL, EXCLUDED_NAMES
 from spyder.config.utils import IMPORT_EXT
 from spyder.plugins.editor.utils.findtasks import TASKS_PATTERN
 from spyder.utils.introspection.module_completion import PREFERRED_MODULES
-from spyder.utils.theme_manager import ThemeManager
+from spyder.utils.theme_manager import APPEARANCE
 
 
 # =============================================================================
@@ -616,7 +616,7 @@ DEFAULTS = [
               # -- Find --
               'find_in_files/find in files': 'Alt+Shift+F',
               }),
-            ('appearance', ThemeManager.APPEARANCE),
+            ('appearance', APPEARANCE),
             ]
 
 
