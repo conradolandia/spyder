@@ -44,3 +44,6 @@ result.xml
 
 # Ignore setuptools development files in the PyLS subrepo
 external-deps/python-lsp-server/.installation-dir/
+
+# Cursor files
+.cursor/
