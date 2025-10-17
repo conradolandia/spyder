@@ -10,7 +10,7 @@ Palettes for dark and light themes used in Spyder.
 
 # Standard library imports
 import logging
-from spyder.utils.theme_manager import theme_manager, SELECTED_THEME
+from spyder.utils.theme_manager import theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,32 @@ def _get_theme_palette():
         SpyderPalette class from the loaded theme, or None if loading fails.
     """
     try:
+        # Export all available themes to config BEFORE loading the selected theme
+        # This ensures all themes are properly populated with their own colors
+        # even when config file is new/reset
+        try:
+            theme_manager.export_all_themes_to_config()
+        except Exception as theme_exp:
+            logger.warning(f"Failed to export all themes to config: {theme_exp}")
+            
+        # Get selected theme from config
+        from spyder.config.manager import CONF
+        selected = CONF.get("appearance", "selected", default="qdarkstyle/dark")
+        
+        # Parse theme name and mode from the selected variant
+        if "/" in selected:
+            theme_name, ui_mode = selected.rsplit("/", 1)
+        else:
+            # Fallback for old config format
+            theme_name = selected
+            ui_mode = "dark"
+        
         # Load the theme
-        palette_class, _ = theme_manager.load_theme(SELECTED_THEME)
+        palette_class, _ = theme_manager.load_theme(theme_name, ui_mode)
         return palette_class
 
     except Exception as e:
-        logger.error(f"Failed to load theme '{SELECTED_THEME}': {e}")
+        logger.error(f"Failed to load theme from config: {e}")
         return None
 
 

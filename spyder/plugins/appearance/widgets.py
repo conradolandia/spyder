@@ -149,6 +149,8 @@ class SchemeEditor(QDialog):
             ]
 
         parent = self.parent
+        
+        # All themes (new and old) now have a 'name' field in config
         self.line_edit = parent.create_lineedit(
             _("Theme name:"), '{0}/name'.format(scheme_name)
         )
@@ -240,6 +242,8 @@ class SchemeEditor(QDialog):
     def restore_original_scheme(self, scheme_name):
         "Restores the original values of the scheme being edited."
         parent = self.parent
+        
+        # Read theme name from config (all themes now have this field)
         self.line_edit.textbox.setText(
             str(parent.get_option('{0}/name'.format(scheme_name)))
         )

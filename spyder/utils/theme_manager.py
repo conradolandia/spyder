@@ -22,9 +22,6 @@ from spyder.plugins.help.utils.sphinxify import CSS_PATH
 
 # Theme configuration
 THEMES_DIR = Path(pkg_resources.resource_filename("spyder.utils", "themes"))
-SELECTED_THEME = "solarized"  # Hardcoded theme selection for now
-SELECTED_UI_MODE = "dark"  # Hardcoded variant selection for now
-SELECTED = f"{SELECTED_THEME}/{SELECTED_UI_MODE}"
 
 
 class ThemeManager:
@@ -99,7 +96,7 @@ class ThemeManager:
         except Exception:
             pass
 
-        return modes
+        return modes if modes else ["dark", "light"]
 
     @staticmethod
     def get_available_theme_variants():
@@ -165,9 +162,14 @@ class ThemeManager:
         """
         # Import here to avoid circular dependency
         from spyder.config.gui import set_color_scheme
+        from spyder.config.manager import CONF
 
-        # Load the theme to get its palette
-        palette, _ = self.load_theme(theme_name, ui_mode)
+        # Remember current theme to restore later
+        current_theme = self._current_theme
+        current_ui_mode = self._current_ui_mode
+
+        # Load the theme to get its palette (without auto-export to avoid circular calls)
+        palette, _ = self._load_theme_internal(theme_name, ui_mode)
 
         # Get the syntax color scheme from the theme
         color_scheme = self.get_syntax_color_scheme(palette)
@@ -177,6 +179,146 @@ class ThemeManager:
 
         # Save to config
         set_color_scheme(variant_name, color_scheme, replace=replace)
+        
+        # Also save the display name for the theme variant
+        theme_parts = variant_name.split('/')
+        display_name = ' '.join([part.capitalize() for part in theme_parts])
+        CONF.set("appearance", f"{variant_name}/name", display_name)
+        
+        # Restore original theme if different from what we just exported
+        if current_theme and current_theme != theme_name:
+            try:
+                self._load_theme_internal(current_theme, current_ui_mode)
+            except Exception:
+                # If restoration fails, just continue
+                pass
+
+    def export_all_themes_to_config(self):
+        """
+        Export all available theme variants to config file.
+        
+        This ensures all themes are available in the config for the preferences UI
+        and for users to customize. Only exports themes that don't already exist
+        in the config (doesn't overwrite user customizations).
+        """
+        from spyder.config.manager import CONF
+        from spyder.utils.syntaxhighlighters import COLOR_SCHEME_KEYS
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Remember the current theme to restore it after exporting all themes
+        current_theme = self._current_theme
+        current_ui_mode = self._current_ui_mode
+        
+        for theme_name in self.get_available_themes():
+            for ui_mode in self.get_theme_modes(theme_name):
+                variant_name = f"{theme_name}/{ui_mode}"
+                
+                # Check if this theme variant exists and is complete in config
+                # For a theme to be considered complete, it needs all color keys
+                is_complete = True
+                try:
+                    # Check for name first
+                    CONF.get("appearance", f"{variant_name}/name")
+                    
+                    # Then check for all required color keys
+                    for key in COLOR_SCHEME_KEYS:
+                        CONF.get("appearance", f"{variant_name}/{key}")
+                except Exception:
+                    # If any check fails, the theme is incomplete
+                    is_complete = False
+                
+                if not is_complete:
+                    # Theme doesn't exist or is incomplete, we need to load it first
+                    # to get its proper colors, then export
+                    try:
+                        # Load the theme palette without auto-exporting 
+                        # (using internal method to avoid circular calls)
+                        palette, _ = self._load_theme_internal(theme_name, ui_mode)
+                        
+                        # Now manually extract colors from the correct palette and save to config
+                        color_scheme = self.get_syntax_color_scheme(palette)
+                        
+                        # Import here to avoid circular dependency
+                        from spyder.config.gui import set_color_scheme
+                        set_color_scheme(variant_name, color_scheme, replace=False)
+                        
+                        # Set the display name
+                        theme_parts = variant_name.split('/')
+                        display_name = ' '.join([part.capitalize() for part in theme_parts])
+                        CONF.set("appearance", f"{variant_name}/name", display_name)
+                        
+                        logger.info(f"Exported theme {variant_name} to config")
+                    except Exception as e:
+                        # Log but don't fail if a theme can't be exported
+                        logger.warning(f"Failed to export theme {variant_name}: {e}")
+        
+        # Restore original theme if needed
+        if current_theme and current_theme != self._current_theme:
+            try:
+                self.load_theme(current_theme, current_ui_mode)
+            except Exception:
+                # If restoration fails, just continue with the current theme
+                pass
+
+    def _load_theme_internal(self, theme_name, ui_mode=None):
+        """
+        Internal method to load a theme without auto-export logic.
+        Used by export_theme_to_config() to avoid circular calls.
+        """
+        if ui_mode is None:
+            ui_mode = "dark" if is_dark_interface() else "light"
+
+        theme_path = self._themes_dir / theme_name
+
+        if not theme_path.exists():
+            raise ValueError(f"Theme '{theme_name}' not found")
+
+        # Import the theme module using importlib (much simpler and safer)
+        import importlib.util
+        
+        theme_module_path = theme_path / "palette.py"
+        if not theme_module_path.exists():
+            raise ValueError(f"Theme '{theme_name}' has no palette.py")
+
+        # Create a unique module name to avoid conflicts
+        module_name = f"spyder_themes_{theme_name}_{ui_mode}_{id(theme_module_path)}"
+        
+        # Load the theme module using importlib
+        spec = importlib.util.spec_from_file_location(module_name, theme_module_path)
+        theme_module = importlib.util.module_from_spec(spec)
+        
+        # Add the theme directory to sys.path temporarily for colorsystem import
+        theme_dir_str = str(theme_path)
+        if theme_dir_str not in sys.path:
+            sys.path.insert(0, theme_dir_str)
+        
+        try:
+            # Execute the module
+            spec.loader.exec_module(theme_module)
+            
+            # Get the correct palette class based on ui_mode
+            if ui_mode == "dark":
+                palette_class = getattr(theme_module, "SpyderPaletteDark", None)
+                if palette_class is None:
+                    raise ValueError(f"Theme '{theme_name}' has no SpyderPaletteDark class")
+            else:  # ui_mode == "light"
+                palette_class = getattr(theme_module, "SpyderPaletteLight", None)
+                if palette_class is None:
+                    raise ValueError(f"Theme '{theme_name}' has no SpyderPaletteLight class")
+
+            # The palette is now a class, not an instance, so we can use it directly
+            palette = palette_class
+
+            # Load the stylesheet
+            stylesheet = self._load_stylesheet(theme_name, ui_mode)
+
+            return palette, stylesheet
+
+        finally:
+            # Remove theme directory from sys.path
+            if theme_dir_str in sys.path:
+                sys.path.remove(theme_dir_str)
 
     def load_theme(self, theme_name, ui_mode=None):
         """
@@ -194,100 +336,33 @@ class ThemeManager:
         tuple
             (palette, stylesheet) for the loaded theme
         """
-        if ui_mode is None:
-            ui_mode = "dark" if is_dark_interface() else "light"
+        # Use internal method to load theme
+        palette, stylesheet = self._load_theme_internal(theme_name, ui_mode)
 
-        theme_path = self._themes_dir / theme_name
+        # Store current theme info
+        self._current_theme = theme_name
+        self._current_palette = palette
+        self._current_stylesheet = stylesheet
+        self._current_ui_mode = ui_mode
 
-        if not theme_path.exists():
-            raise ValueError(f"Theme '{theme_name}' not found")
-
-        # Import the theme module
-        theme_module_path = theme_path / "palette.py"
-        if not theme_module_path.exists():
-            raise ValueError(f"Theme '{theme_name}' has no palette.py")
-
-        # Add the theme directory to sys.path temporarily
-        theme_dir_str = str(theme_path)
-        if theme_dir_str not in sys.path:
-            sys.path.insert(0, theme_dir_str)
-
+        # Export syntax colors to config if not already present
+        # Check if colors exist by trying to get one key
+        from spyder.config.manager import CONF
+        variant_name = f"{theme_name}/{ui_mode}"
         try:
-            # First, load the colorsystem module if it exists
-            colorsystem_path = theme_path / "colorsystem.py"
-            colorsystem_namespace = {}
-            if colorsystem_path.exists():
-                with open(colorsystem_path, "r", encoding="utf-8") as f:
-                    colorsystem_code = f.read()
-                exec(colorsystem_code, colorsystem_namespace)
+            # Try to get a color - if it fails, colors don't exist
+            CONF.get("appearance", f"{variant_name}/background")
+        except Exception:
+            # Colors don't exist, export them (but don't replace)
+            # Import here to avoid issues during initial loading
+            from spyder.config.gui import set_color_scheme
+            color_scheme = self.get_syntax_color_scheme(palette)
+            set_color_scheme(variant_name, color_scheme, replace=False)
 
-            # Import the theme module using exec
-            with open(theme_module_path, "r", encoding="utf-8") as f:
-                theme_code = f.read()
+        # Update ui_mode in config to match loaded theme
+        CONF.set("appearance", "ui_mode", ui_mode)
 
-            # Create a namespace for the theme module with necessary globals
-            theme_namespace = {
-                "__name__": f"{theme_name}_palette",
-                "__file__": str(theme_module_path),
-                "__package__": theme_name,
-            }
-
-            # Add colorsystem classes to the namespace
-            theme_namespace.update(colorsystem_namespace)
-
-            # Execute the theme code in the namespace
-            exec(theme_code, theme_namespace)
-
-            # Create a simple module-like object
-            class ThemeModule:
-                def __init__(self, namespace):
-                    self.__dict__.update(namespace)
-
-            theme_module = ThemeModule(theme_namespace)
-
-            # Get the SpyderPalette from the theme (it's already set based on interface mode)
-            palette_class = getattr(theme_module, "SpyderPalette", None)
-
-            if palette_class is None:
-                raise ValueError(f"Theme '{theme_name}' has no SpyderPalette defined")
-
-            # The palette is now a class, not an instance, so we can use it directly
-            # or create an instance if needed
-            palette = palette_class
-
-            # Load the stylesheet
-            stylesheet = self._load_stylesheet(theme_name, ui_mode)
-
-            # Store current theme info
-            self._current_theme = theme_name
-            self._current_palette = palette
-            self._current_stylesheet = stylesheet
-            self._current_theme_module = theme_namespace  # Store the theme module
-            self._current_ui_mode = ui_mode
-
-            # Export syntax colors to config if not already present
-            # Check if colors exist by trying to get one key
-            from spyder.config.manager import CONF
-            variant_name = f"{theme_name}/{ui_mode}"
-            try:
-                # Try to get a color - if it fails, colors don't exist
-                CONF.get("appearance", f"{variant_name}/background")
-            except Exception:
-                # Colors don't exist, export them (but don't replace)
-                # Import here to avoid issues during initial loading
-                from spyder.config.gui import set_color_scheme
-                color_scheme = self.get_syntax_color_scheme(palette)
-                set_color_scheme(variant_name, color_scheme, replace=False)
-
-            # Update ui_mode in config to match loaded theme
-            CONF.set("appearance", "ui_mode", ui_mode)
-
-            return palette, stylesheet
-
-        finally:
-            # Remove theme directory from sys.path
-            if theme_dir_str in sys.path:
-                sys.path.remove(theme_dir_str)
+        return palette, stylesheet
 
     def _load_stylesheet(self, theme_name, ui_mode):
         """Load the QSS stylesheet for a theme."""
@@ -372,10 +447,11 @@ APPEARANCE = {
     "monospace_app_font/size": 0,
     "monospace_app_font/italic": False,
     "monospace_app_font/bold": False,
-    "ui_mode": SELECTED_UI_MODE,
-    # Themes (was 'names')
-    "themes": ThemeManager.get_available_theme_variants(),
-    "selected": SELECTED,
+    "ui_mode": "dark",  # Default, will be updated based on selected theme
+    # List of available theme variants
+    "names": ThemeManager.get_available_theme_variants(),
+    # Default to qdarkstyle/dark if no selection exists
+    "selected": "qdarkstyle/dark",
 }
 
 

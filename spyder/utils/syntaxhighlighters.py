@@ -92,7 +92,8 @@ COLOR_SCHEME_DEFAULT_VALUES = {
     "magic":      ("#c670e0", False, False),
 }
 
-COLOR_SCHEME_NAMES = CONF.get('appearance', 'names')
+# Get theme names from config, with empty list as default for fresh installs
+COLOR_SCHEME_NAMES = CONF.get('appearance', 'names', default=[])
 
 # Mapping for file extensions that use Pygments highlighting but should use
 # different lexers than Pygments' autodetection suggests.  Keys are file
@@ -131,14 +132,31 @@ def get_span(match, key=None):
 
 
 def get_color_scheme(name):
-    """Get a color scheme from config using its name"""
-    name = name.lower()
+    """
+    Get a color scheme from config using its name.
+    
+    If name is not found or is a legacy name like 'Spyder', 
+    returns the currently selected theme's colors from config.
+    """
+    # Handle legacy 'Spyder' default by using current selected theme
+    if name and name.lower() == 'spyder':
+        name = CONF.get('appearance', 'selected', default='qdarkstyle/dark')
+    
+    # Normalize name
+    if name:
+        name = name.lower()
+    else:
+        # No name provided, use currently selected theme
+        name = CONF.get('appearance', 'selected', default='qdarkstyle/dark')
+    
     scheme = {}
     for key in COLOR_SCHEME_KEYS:
         try:
-            scheme[key] = CONF.get('appearance', name+'/'+key)
-        except:
-            scheme[key] = CONF.get('appearance', 'spyder/'+key)
+            scheme[key] = CONF.get('appearance', f'{name}/{key}')
+        except Exception:
+            # Fallback to default values if config doesn't have this theme
+            scheme[key] = COLOR_SCHEME_DEFAULT_VALUES[key]
+    
     return scheme
 
 

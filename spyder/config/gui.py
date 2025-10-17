@@ -20,7 +20,7 @@ from qtpy import QT_VERSION
 from qtpy.QtGui import QFont, QFontDatabase
 
 # Local imports
-from spyder.config.base import is_dark_interface
+from spyder.config.base import is_dark_interface  # noqa: F401
 from spyder.config.manager import CONF
 from spyder.utils import syntaxhighlighters as sh
 
@@ -124,5 +124,13 @@ def is_dark_font_color(color_scheme):
     return dark_color(font_color)
 
 
+# Initialize default color schemes only for old-style themes
+# New theme variants (with '/') are populated on-demand by ThemeManager
 for _name in sh.COLOR_SCHEME_NAMES:
-    set_default_color_scheme(_name, replace=False)
+    # Skip new theme variants - they're handled by ThemeManager
+    if '/' not in _name:
+        try:
+            set_default_color_scheme(_name, replace=True)
+        except Exception:
+            # Theme doesn't have defaults in old format, skip it
+            pass
