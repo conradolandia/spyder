@@ -177,8 +177,15 @@ class ThemeManager:
         # Build the full theme variant name (e.g., "solarized/dark")
         variant_name = f"{theme_name}/{ui_mode}"
 
-        # Save to config
-        set_color_scheme(variant_name, color_scheme, replace=replace)
+        # Force direct update of colors in config when replace=True
+        if replace:
+            section = "appearance"
+            for key, value in color_scheme.items():
+                option = f"{variant_name}/{key}"
+                CONF.set(section, option, value)
+        else:
+            # Use set_color_scheme for normal operation (when not forcing replacement)
+            set_color_scheme(variant_name, color_scheme, replace=replace)
         
         # Also save the display name for the theme variant
         theme_parts = variant_name.split('/')
@@ -309,7 +316,7 @@ class ThemeManager:
 
             # The palette is now a class, not an instance, so we can use it directly
             palette = palette_class
-
+            
             # Load the stylesheet
             stylesheet = self._load_stylesheet(theme_name, ui_mode)
 
@@ -345,19 +352,42 @@ class ThemeManager:
         self._current_stylesheet = stylesheet
         self._current_ui_mode = ui_mode
 
-        # Export syntax colors to config if not already present
-        # Check if colors exist by trying to get one key
+        # Manually and directly ensure theme colors are saved to config
+        # This approach bypasses any potential module caching issues
+        # by using palette values directly from the loaded theme
         from spyder.config.manager import CONF
+                      
+        # Map palette attributes to config keys
+        palette_attrs = {
+            "background": palette.EDITOR_BACKGROUND,
+            "currentline": palette.EDITOR_CURRENTLINE, 
+            "currentcell": palette.EDITOR_CURRENTCELL,
+            "occurrence": palette.EDITOR_OCCURRENCE,
+            "ctrlclick": palette.EDITOR_CTRLCLICK,
+            "sideareas": palette.EDITOR_SIDEAREAS,
+            "matched_p": palette.EDITOR_MATCHED_P,
+            "unmatched_p": palette.EDITOR_UNMATCHED_P,
+            "normal": palette.EDITOR_NORMAL,
+            "keyword": palette.EDITOR_KEYWORD,
+            "builtin": palette.EDITOR_BUILTIN,
+            "definition": palette.EDITOR_DEFINITION,
+            "comment": palette.EDITOR_COMMENT,
+            "string": palette.EDITOR_STRING,
+            "number": palette.EDITOR_NUMBER,
+            "instance": palette.EDITOR_INSTANCE,
+            "magic": palette.EDITOR_MAGIC,
+        }
+        
+        # Set all colors directly in the config
         variant_name = f"{theme_name}/{ui_mode}"
-        try:
-            # Try to get a color - if it fails, colors don't exist
-            CONF.get("appearance", f"{variant_name}/background")
-        except Exception:
-            # Colors don't exist, export them (but don't replace)
-            # Import here to avoid issues during initial loading
-            from spyder.config.gui import set_color_scheme
-            color_scheme = self.get_syntax_color_scheme(palette)
-            set_color_scheme(variant_name, color_scheme, replace=False)
+        for key, value in palette_attrs.items():
+            option = f"{variant_name}/{key}"
+            CONF.set("appearance", option, value)
+            
+        # Also set the display name
+        theme_parts = variant_name.split('/')
+        display_name = ' '.join([part.capitalize() for part in theme_parts])
+        CONF.set("appearance", f"{variant_name}/name", display_name)
 
         # Update ui_mode in config to match loaded theme
         CONF.set("appearance", "ui_mode", ui_mode)

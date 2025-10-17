@@ -105,7 +105,8 @@ def set_color_scheme(name, color_scheme, replace=True):
     for key in sh.COLOR_SCHEME_KEYS:
         option = "%s/%s" % (name, key)
         value = CONF.get(section, option, default=None)
-        if value is None or replace or name not in names:
+        # Fix the logic to properly honor the replace parameter
+        if value is None or name not in names or replace:
             CONF.set(section, option, color_scheme[key])
     names.append(str(name))
     CONF.set(section, "names", sorted(list(set(names))))
