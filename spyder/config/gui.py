@@ -20,6 +20,7 @@ from qtpy import QT_VERSION
 from qtpy.QtGui import QFont, QFontDatabase
 
 # Local imports
+from spyder.config.base import is_dark_interface
 from spyder.config.manager import CONF
 from spyder.utils import syntaxhighlighters as sh
 
@@ -121,20 +122,6 @@ def is_dark_font_color(color_scheme):
     color_scheme = get_color_scheme(color_scheme)
     font_color, fon_fw, fon_fs = color_scheme['normal']
     return dark_color(font_color)
-
-
-def is_dark_interface():
-    ui_mode = CONF.get('appearance', 'ui_mode')
-    color_scheme = CONF.get('appearance', 'selected')
-    if ui_mode == 'dark':
-        return True
-    elif ui_mode == 'automatic':
-        if not is_dark_font_color(color_scheme):
-            return True
-        else:
-            return False
-    else:
-        return False
 
 
 for _name in sh.COLOR_SCHEME_NAMES:

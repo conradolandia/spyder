@@ -115,6 +115,24 @@ def use_dev_config_dir(use_dev_config_dir=USE_DEV_CONFIG_DIR):
     return use_dev_config_dir
 
 
+def is_dark_interface():
+    """
+    Check if current interface is dark mode.
+    
+    Determines the interface mode by inspecting the selected theme variant.
+    Theme variants follow the format 'theme_name/mode' (e.g., 'solarized/dark').
+    """
+    from spyder.config.manager import CONF
+    
+    selected = CONF.get("appearance", "selected", "qdarkstyle/dark")
+    
+    if "/" in selected:
+        _, ui_mode = selected.rsplit("/", 1)
+        return ui_mode == "dark"
+    
+    return CONF.get("appearance", "ui_mode", "dark") == "dark"
+
+
 #==============================================================================
 # Debug helpers
 #==============================================================================

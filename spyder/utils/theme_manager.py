@@ -16,7 +16,7 @@ from pathlib import Path
 import pkg_resources
 
 # Local imports
-from spyder.config.base import running_under_pytest
+from spyder.config.base import is_dark_interface, running_under_pytest
 from spyder.config.fonts import MEDIUM, MONOSPACE
 from spyder.plugins.help.utils.sphinxify import CSS_PATH
 
@@ -39,12 +39,6 @@ class ThemeManager:
         self._current_theme_module = None  # Store the loaded theme module
         self._loaded_resource_modules = {}  # Keep references to resource modules
         self._current_ui_mode = None  # Track current interface mode
-
-    @staticmethod
-    def is_dark_interface():
-        from spyder.config.manager import CONF
-
-        return CONF.get("appearance", "ui_mode") == "dark"
 
     @staticmethod
     def get_available_themes():
@@ -117,6 +111,73 @@ class ThemeManager:
 
         return sorted(variants)
 
+    def get_syntax_color_scheme(self, palette):
+        """
+        Extract syntax highlighting colors from a theme palette.
+
+        Parameters
+        ----------
+        palette : class
+            Theme palette class with EDITOR_* attributes
+
+        Returns
+        -------
+        dict
+            Dictionary with syntax color scheme in the format expected by
+            set_color_scheme(), compatible with COLOR_SCHEME_KEYS format.
+        """
+        # Map palette EDITOR_* attributes to COLOR_SCHEME_KEYS format
+        color_scheme = {
+            "background": palette.EDITOR_BACKGROUND,
+            "currentline": palette.EDITOR_CURRENTLINE,
+            "currentcell": palette.EDITOR_CURRENTCELL,
+            "occurrence": palette.EDITOR_OCCURRENCE,
+            "ctrlclick": palette.EDITOR_CTRLCLICK,
+            "sideareas": palette.EDITOR_SIDEAREAS,
+            "matched_p": palette.EDITOR_MATCHED_P,
+            "unmatched_p": palette.EDITOR_UNMATCHED_P,
+            "normal": palette.EDITOR_NORMAL,
+            "keyword": palette.EDITOR_KEYWORD,
+            "builtin": palette.EDITOR_BUILTIN,
+            "definition": palette.EDITOR_DEFINITION,
+            "comment": palette.EDITOR_COMMENT,
+            "string": palette.EDITOR_STRING,
+            "number": palette.EDITOR_NUMBER,
+            "instance": palette.EDITOR_INSTANCE,
+            "magic": palette.EDITOR_MAGIC,
+        }
+
+        return color_scheme
+
+    def export_theme_to_config(self, theme_name, ui_mode, replace=False):
+        """
+        Export theme syntax colors to user configuration file.
+
+        Parameters
+        ----------
+        theme_name : str
+            Name of the theme
+        ui_mode : str
+            'dark' or 'light' mode
+        replace : bool, optional
+            If True, overwrites existing colors (for reset to defaults).
+            If False, only adds if not already present. Default is False.
+        """
+        # Import here to avoid circular dependency
+        from spyder.config.gui import set_color_scheme
+
+        # Load the theme to get its palette
+        palette, _ = self.load_theme(theme_name, ui_mode)
+
+        # Get the syntax color scheme from the theme
+        color_scheme = self.get_syntax_color_scheme(palette)
+
+        # Build the full theme variant name (e.g., "solarized/dark")
+        variant_name = f"{theme_name}/{ui_mode}"
+
+        # Save to config
+        set_color_scheme(variant_name, color_scheme, replace=replace)
+
     def load_theme(self, theme_name, ui_mode=None):
         """
         Load a theme by name.
@@ -134,7 +195,7 @@ class ThemeManager:
             (palette, stylesheet) for the loaded theme
         """
         if ui_mode is None:
-            ui_mode = "dark" if self.is_dark_interface() else "light"
+            ui_mode = "dark" if is_dark_interface() else "light"
 
         theme_path = self._themes_dir / theme_name
 
@@ -203,6 +264,23 @@ class ThemeManager:
             self._current_stylesheet = stylesheet
             self._current_theme_module = theme_namespace  # Store the theme module
             self._current_ui_mode = ui_mode
+
+            # Export syntax colors to config if not already present
+            # Check if colors exist by trying to get one key
+            from spyder.config.manager import CONF
+            variant_name = f"{theme_name}/{ui_mode}"
+            try:
+                # Try to get a color - if it fails, colors don't exist
+                CONF.get("appearance", f"{variant_name}/background")
+            except Exception:
+                # Colors don't exist, export them (but don't replace)
+                # Import here to avoid issues during initial loading
+                from spyder.config.gui import set_color_scheme
+                color_scheme = self.get_syntax_color_scheme(palette)
+                set_color_scheme(variant_name, color_scheme, replace=False)
+
+            # Update ui_mode in config to match loaded theme
+            CONF.set("appearance", "ui_mode", ui_mode)
 
             return palette, stylesheet
 
