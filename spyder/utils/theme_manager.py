@@ -11,6 +11,7 @@ Theme manager for Spyder's new theming system.
 # Standard library imports
 import ast
 import sys
+import importlib.util
 from pathlib import Path
 
 import pkg_resources
@@ -280,25 +281,32 @@ class ThemeManager:
 
         if not theme_path.exists():
             raise ValueError(f"Theme '{theme_name}' not found")
-
-        # Import the theme module using importlib (much simpler and safer)
-        import importlib.util
         
+        # Check for required files
         theme_module_path = theme_path / "palette.py"
+        colorsystem_path = theme_path / "colorsystem.py"
         if not theme_module_path.exists():
             raise ValueError(f"Theme '{theme_name}' has no palette.py")
-
-        # Create a unique module name to avoid conflicts
-        module_name = f"spyder_themes_{theme_name}_{ui_mode}_{id(theme_module_path)}"
+        if not colorsystem_path.exists():
+            raise ValueError(f"Theme '{theme_name}' has no colorsystem.py")
         
-        # Load the theme module using importlib
-        spec = importlib.util.spec_from_file_location(module_name, theme_module_path)
-        theme_module = importlib.util.module_from_spec(spec)
-        
-        # Add the theme directory to sys.path temporarily for colorsystem import
+        # Use a simple and reliable approach: temporarily add the theme directory to sys.path
+        # and make sure we always clear any cached colorsystem module
         theme_dir_str = str(theme_path)
         if theme_dir_str not in sys.path:
             sys.path.insert(0, theme_dir_str)
+        
+        # Remove colorsystem from sys.modules to ensure we load the theme-specific one
+        if 'colorsystem' in sys.modules:
+            del sys.modules['colorsystem']
+            
+        # Create a unique module name to avoid conflicts
+        unique_id = id(theme_module_path)
+        module_name = f"theme_{theme_name}_{ui_mode}_{unique_id}"
+        
+        # Load the theme module
+        spec = importlib.util.spec_from_file_location(module_name, theme_module_path)
+        theme_module = importlib.util.module_from_spec(spec)
         
         try:
             # Execute the module
@@ -323,7 +331,7 @@ class ThemeManager:
             return palette, stylesheet
 
         finally:
-            # Remove theme directory from sys.path
+            # Restore sys.path
             if theme_dir_str in sys.path:
                 sys.path.remove(theme_dir_str)
 
