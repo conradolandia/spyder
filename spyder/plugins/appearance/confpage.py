@@ -52,6 +52,7 @@ class AppearanceConfigPage(PluginConfigPage):
     def __init__(self, plugin, parent):
         super().__init__(plugin, parent)
         self._is_shown = False
+        self._initial_load = True  # Track if we're in initial load
         self.pre_apply_callback = self.check_color_scheme_notification
 
         # Notifications for this option are disabled when the plugin is
@@ -303,28 +304,10 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        ui_mode = self.get_option('ui_mode')
-        mismatch = self.color_scheme_and_ui_theme_mismatch(
-            self.current_scheme, ui_mode)
-
-        if ui_mode == 'automatic':
-            if mismatch:
-                # Ask for a restart
-                self.changed_options.add('ui_mode')
-            else:
-                # Don't ask for a restart
-                if 'ui_mode' in self.changed_options:
-                    self.changed_options.remove('ui_mode')
-        else:
-            if 'ui_mode' in self.changed_options:
-                if not mismatch:
-                    # Don't ask for a restart
-                    self.changed_options.remove('ui_mode')
-            else:
-                if mismatch:
-                    # Ask for a restart
-                    self.changed_options.add('ui_mode')
-
+        # Theme and UI mode changes always require restart
+        # The on_scheme_changed() method already added these to changed_options
+        # Don't remove them here
+        
         # We need to restore notifications for these options so they can be
         # changed when the user selects other values for them.
         for option in ['selected', 'ui_mode']:
@@ -381,53 +364,57 @@ class AppearanceConfigPage(PluginConfigPage):
     # -------------------------------------------------------------------------
     def update_combobox(self):
         """Recreates the combobox contents."""
-        index = self.current_scheme_index
+        # Save currently selected theme (not index, since order may change)
+        current_scheme = self.get_option('selected', default='spyder_themes.qdarkstyle/dark')
+        
         self.schemes_combobox.blockSignals(True)
-        names = self.get_option("names")
+        
+        # Use theme manager to get available themes dynamically
+        from spyder.utils.theme_manager import theme_manager
+        names = theme_manager.get_available_theme_variants()
         try:
             names.pop(names.index(u'Custom'))
         except ValueError:
             pass
         custom_names = self.get_option("custom_names", [])
 
-        # Useful for retrieving the actual data
-        for n in names + custom_names:
-            # All themes now have a 'name' field in config
-            # Make option value a string to prevent errors when using it
-            # as widget text. See spyder-ide/spyder#18929
-            try:
-                item_name = str(self.get_option('{0}/name'.format(n)))
-                self.scheme_choices_dict[item_name] = n
-            except Exception:
-                # Fallback: use the name itself capitalized
-                self.scheme_choices_dict[n.capitalize()] = n
+        # Clear existing data
+        self.scheme_choices_dict.clear()
+        combobox = self.schemes_combobox
+        combobox.clear()
 
+        # Add separator placeholder for custom names
         if custom_names:
             choices = names + [None] + custom_names
         else:
             choices = names
 
-        combobox = self.schemes_combobox
-        combobox.clear()
-
+        # Single pass: build dict and populate combobox at the same time
         for name in choices:
             if name is None:
+                # Insert separator
+                combobox.insertSeparator(combobox.count())
                 continue
             
-            # All themes now have a 'name' field in config
+            # Get display name (from config or generate it)
             try:
-                # Make option value a string to prevent errors when using it
-                # as widget text. See spyder-ide/spyder#18929
-                item_name = str(self.get_option('{0}/name'.format(name)))
+                display_name = str(self.get_option('{0}/name'.format(name)))
             except Exception:
-                # Fallback: capitalize the name
-                item_name = name.capitalize()
+                display_name = theme_manager.get_theme_display_name(name)
             
-            combobox.addItem(item_name, name)
+            # Add to dictionary and combobox
+            self.scheme_choices_dict[display_name] = name
+            combobox.addItem(display_name, name)
 
-        if custom_names:
-            combobox.insertSeparator(len(names))
-
+        # Find and select the current theme (by value, not index)
+        index = combobox.findData(current_scheme)
+        if index == -1:
+            # Theme not found, default to qdarkstyle/dark
+            index = combobox.findData('spyder_themes.qdarkstyle/dark')
+        if index == -1:
+            # Still not found, just use first item
+            index = 0
+        
         self.schemes_combobox.blockSignals(False)
         self.schemes_combobox.setCurrentIndex(index)
 
@@ -488,12 +475,27 @@ class AppearanceConfigPage(PluginConfigPage):
         """Handle scheme selection change - update config."""
         try:
             scheme = self.current_scheme
+            
+            # Skip restart logic during initial page load
+            if not self._initial_load:
+                # Check if theme actually changed to trigger restart
+                old_scheme = self.get_option('selected', default='')
+                if old_scheme and old_scheme != scheme:
+                    # Theme changed, always require restart
+                    # (even if UI mode stays the same, the theme itself changed)
+                    self.changed_options.add('selected')
+                    self.changed_options.add('ui_mode')
+            
             self.set_option('selected', scheme)
             
             # Update ui_mode based on selected theme variant
             if '/' in scheme:
                 _, ui_mode = scheme.rsplit('/', 1)
                 self.set_option('ui_mode', ui_mode)
+            
+            # After first call, we're no longer in initial load
+            if self._initial_load:
+                self._initial_load = False
         except Exception:
             # Ignore errors during initialization
             pass

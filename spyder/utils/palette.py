@@ -50,6 +50,11 @@ def _get_theme_palette():
             theme_name = selected
             ui_mode = "dark"
         
+        # Handle old theme names by mapping them to new package format
+        if not theme_name.startswith('spyder_themes.'):
+            # Map old theme names to new package format
+            theme_name = f"spyder_themes.{theme_name}"
+        
         # Load the theme
         palette_class, _ = theme_manager.load_theme(theme_name, ui_mode)
         return palette_class
