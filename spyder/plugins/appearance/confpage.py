@@ -27,7 +27,7 @@ from qtpy.QtWidgets import (
 from spyder.api.plugin_registration.registry import PLUGIN_REGISTRY
 from spyder.api.preferences import PluginConfigPage
 from spyder.api.translations import _
-from spyder.config.gui import get_font, is_dark_font_color, set_font
+from spyder.config.gui import get_font, set_font
 
 from spyder.config.manager import CONF
 from spyder.plugins.appearance.widgets import SchemeEditor
@@ -52,12 +52,11 @@ class AppearanceConfigPage(PluginConfigPage):
     def __init__(self, plugin, parent):
         super().__init__(plugin, parent)
         self._is_shown = False
-        self._initial_load = True  # Track if we're in initial load
-        self.pre_apply_callback = self.check_color_scheme_notification
 
         # Notifications for this option are disabled when the plugin is
         # initialized, so we need to restore them here.
         CONF.restore_notifications(section='appearance', option='ui_mode')
+        CONF.restore_notifications(section='appearance', option='selected')
 
     def setup_page(self):
         names = self.get_option("names")
@@ -84,7 +83,8 @@ class AppearanceConfigPage(PluginConfigPage):
 
         self.scheme_choices_dict = {}
         schemes_combobox_widget = self.create_combobox(
-            '', [('', '')], 'selected', items_elide_mode=Qt.ElideNone
+            '', [('', '')], 'selected', items_elide_mode=Qt.ElideNone,
+            restart=True
         )
         self.schemes_combobox = schemes_combobox_widget.combobox
 
@@ -304,10 +304,6 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        # Theme and UI mode changes always require restart
-        # The on_scheme_changed() method already added these to changed_options
-        # Don't remove them here
-        
         # We need to restore notifications for these options so they can be
         # changed when the user selects other values for them.
         for option in ['selected', 'ui_mode']:
@@ -476,26 +472,13 @@ class AppearanceConfigPage(PluginConfigPage):
         try:
             scheme = self.current_scheme
             
-            # Skip restart logic during initial page load
-            if not self._initial_load:
-                # Check if theme actually changed to trigger restart
-                old_scheme = self.get_option('selected', default='')
-                if old_scheme and old_scheme != scheme:
-                    # Theme changed, always require restart
-                    # (even if UI mode stays the same, the theme itself changed)
-                    self.changed_options.add('selected')
-                    self.changed_options.add('ui_mode')
-            
+            # Save the selected theme
             self.set_option('selected', scheme)
             
             # Update ui_mode based on selected theme variant
             if '/' in scheme:
                 _, ui_mode = scheme.rsplit('/', 1)
                 self.set_option('ui_mode', ui_mode)
-            
-            # After first call, we're no longer in initial load
-            if self._initial_load:
-                self._initial_load = False
         except Exception:
             # Ignore errors during initialization
             pass
@@ -649,47 +632,3 @@ class AppearanceConfigPage(PluginConfigPage):
         """
         return dark_color(SpyderPalette.COLOR_BACKGROUND_1)
 
-    def color_scheme_and_ui_theme_mismatch(self, color_scheme, ui_mode):
-        """
-        Detect if there is a mismatch between the current color scheme and
-        UI theme.
-
-        Parameters
-        ----------
-        color_scheme: str
-            Name of one of Spyder's color schemes. For instance: 'Zenburn' or
-            'Monokai'.
-        ui_mode: str
-            Name of the one of Spyder's interface themes. This can 'automatic',
-            'dark' or 'light'.
-        """
-        # A dark color scheme is characterized by a light font and viceversa
-        is_dark_color_scheme = not is_dark_font_color(color_scheme)
-        if ui_mode == 'automatic':
-            mismatch = (
-                (self.is_dark_interface() and not is_dark_color_scheme) or
-                (not self.is_dark_interface() and is_dark_color_scheme)
-            )
-        else:
-            mismatch = (
-                (self.is_dark_interface() and ui_mode == 'light') or
-                (not self.is_dark_interface() and ui_mode == 'dark')
-            )
-
-        return mismatch
-
-    def check_color_scheme_notification(self):
-        """
-        Check if it's necessary to notify plugins to update their color scheme.
-        """
-        ui_theme_map = {0: 'automatic', 1: 'light', 2: 'dark'}
-        ui_mode = ui_theme_map[self.current_ui_theme_index]
-        mismatch = self.color_scheme_and_ui_theme_mismatch(
-            self.current_scheme, ui_mode)
-
-        # We don't need to apply the selected color scheme if there's a
-        # mismatch between it and the UI theme. Instead, we only we need to ask
-        # for a restart.
-        if mismatch:
-            for option in ['selected', 'ui_mode']:
-                CONF.disable_notifications(section='appearance', option=option)
