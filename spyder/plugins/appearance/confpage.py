@@ -303,18 +303,17 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        # We need to restore notifications for this option so it can be
-        # changed when the user selects other values for it.
+        # Save the currently selected theme to config
+        try:
+            scheme = self.current_scheme
+            self.set_option('selected', scheme)
+        except Exception:
+            # Ignore errors if no theme is selected
+            pass
+        
         CONF.restore_notifications(section='appearance', option='selected')
-
         self.update_combobox()
         self.update_editor_preview()
-
-        # This applies changes to a custom color scheme to all open editors.
-        # Fixes spyder-ide/spyder#22693
-        for plugin_name in PLUGIN_REGISTRY:
-            plugin = PLUGIN_REGISTRY.get_plugin(plugin_name)
-            plugin.update_font()
 
         return set(self.changed_options)
 
@@ -466,12 +465,11 @@ class AppearanceConfigPage(PluginConfigPage):
     # ---- Actions
     # -------------------------------------------------------------------------
     def on_scheme_changed(self):
-        """Handle scheme selection change - update config."""
+        """Handle scheme selection change - update preview only."""
         try:
-            scheme = self.current_scheme
-            
-            # Save the selected theme
-            self.set_option('selected', scheme)
+            # Only update the preview, don't save to config yet
+            # The theme will be saved when user clicks Apply/OK
+            self.update_editor_preview()
         except Exception:
             # Ignore errors during initialization
             pass

@@ -790,10 +790,12 @@ class EditorStack(QWidget, SpyderWidgetMixin):
     def on_help_connection_change(self, value):
         self.set_help_enabled(value)
 
-    @on_conf_change(section='appearance', option='selected')
-    def on_color_scheme_change(self, value):
-        logger.debug(f"Set color scheme to {value}")
-        self.set_color_scheme(value)
+    # Note: Theme changes now require restart for full UI application
+    # Syntax colors will be applied on next editor creation
+    # @on_conf_change(section='appearance', option='selected')
+    # def on_color_scheme_change(self, value):
+    #     logger.debug(f"Set color scheme to {value}")
+    #     self.set_color_scheme(value)
 
     def set_closable(self, state):
         """Parent widget must handle the closable state"""
