@@ -35,7 +35,7 @@ from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.mixins import SpyderWidgetMixin
 from spyder.config.base import _, running_under_pytest
-from spyder.config.gui import is_dark_interface
+from spyder.config.manager import CONF
 from spyder.config.utils import (
     get_edit_filetypes, get_edit_filters, get_filter, is_kde_desktop
 )
@@ -367,10 +367,16 @@ class EditorStack(QWidget, SpyderWidgetMixin):
             'column_cursor': 'Ctrl+Alt+Shift'
         }
 
-        # Set default color scheme
-        color_scheme = 'spyder/dark' if is_dark_interface() else 'spyder'
+        # Set default color scheme from config
+        color_scheme = CONF.get("appearance", "selected", "qdarkstyle/dark")
+        
+        # Fallback if the selected theme is not available yet
         if color_scheme not in syntaxhighlighters.COLOR_SCHEME_NAMES:
-            color_scheme = syntaxhighlighters.COLOR_SCHEME_NAMES[0]
+            if syntaxhighlighters.COLOR_SCHEME_NAMES:
+                color_scheme = syntaxhighlighters.COLOR_SCHEME_NAMES[0]
+            else:
+                # No themes loaded yet, use the default theme
+                color_scheme = "qdarkstyle/dark"
         self.color_scheme = color_scheme
 
         # Real-time code analysis
@@ -784,11 +790,8 @@ class EditorStack(QWidget, SpyderWidgetMixin):
     def on_help_connection_change(self, value):
         self.set_help_enabled(value)
 
-    @on_conf_change(section='appearance', option=['selected', 'ui_mode'])
-    def on_color_scheme_change(self, option, value):
-        if option == 'ui_mode':
-            value = self.get_conf('selected', section='appearance')
-
+    @on_conf_change(section='appearance', option='selected')
+    def on_color_scheme_change(self, value):
         logger.debug(f"Set color scheme to {value}")
         self.set_color_scheme(value)
 

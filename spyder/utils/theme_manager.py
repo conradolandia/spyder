@@ -28,7 +28,6 @@ class ThemeManager:
         self._current_stylesheet = None
         self._current_theme_module = None  # Store the loaded theme module
         self._loaded_resource_modules = {}  # Keep references to resource modules
-        self._current_ui_mode = None  # Track current interface mode
 
     @staticmethod
     def get_available_themes():
@@ -133,7 +132,7 @@ class ThemeManager:
             
             # Add mode if present
             if mode:
-                return f"{theme_name} {mode.title()}"
+                return f"{theme_name} ({mode.title()})"
             else:
                 return theme_name
                 
@@ -199,7 +198,6 @@ class ThemeManager:
 
         # Remember current theme to restore later
         current_theme = self._current_theme
-        current_ui_mode = self._current_ui_mode
 
         # Load the theme to get its palette (without auto-export to avoid circular calls)
         palette, _ = self._load_theme_internal(theme_name, ui_mode)
@@ -227,7 +225,9 @@ class ThemeManager:
         # Restore original theme if different from what we just exported
         if current_theme and current_theme != theme_name:
             try:
-                self._load_theme_internal(current_theme, current_ui_mode)
+                # Determine ui_mode from current interface state
+                restore_ui_mode = "dark" if is_dark_interface() else "light"
+                self._load_theme_internal(current_theme, restore_ui_mode)
             except Exception:
                 # If restoration fails, just continue
                 pass
@@ -247,7 +247,6 @@ class ThemeManager:
         
         # Remember the current theme to restore it after exporting all themes
         current_theme = self._current_theme
-        current_ui_mode = self._current_ui_mode
         
         for theme_name in self.get_available_themes():
             for ui_mode in self.get_theme_modes(theme_name):
@@ -294,7 +293,9 @@ class ThemeManager:
         # Restore original theme if needed
         if current_theme and current_theme != self._current_theme:
             try:
-                self.load_theme(current_theme, current_ui_mode)
+                # Determine ui_mode from current interface state
+                restore_ui_mode = "dark" if is_dark_interface() else "light"
+                self.load_theme(current_theme, restore_ui_mode)
             except Exception:
                 # If restoration fails, just continue with the current theme
                 pass
@@ -345,7 +346,6 @@ class ThemeManager:
         self._current_theme = theme_name
         self._current_palette = palette
         self._current_stylesheet = stylesheet
-        self._current_ui_mode = ui_mode
 
         # Manually and directly ensure theme colors are saved to config
         # This approach bypasses any potential module caching issues
@@ -382,9 +382,6 @@ class ThemeManager:
         # Also set the display name using the helper method
         display_name = ThemeManager.get_theme_display_name(variant_name)
         CONF.set("appearance", f"{variant_name}/name", display_name)
-
-        # Update ui_mode in config to match loaded theme
-        CONF.set("appearance", "ui_mode", ui_mode)
 
         return palette, stylesheet
 
@@ -474,7 +471,6 @@ APPEARANCE = {
     "monospace_app_font/size": 0,
     "monospace_app_font/italic": False,
     "monospace_app_font/bold": False,
-    "ui_mode": "dark",  # Default, will be updated based on selected theme
     # List of available theme variants (will be populated dynamically)
     "names": [],
     # Default to qdarkstyle/dark if no selection exists

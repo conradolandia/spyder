@@ -11,11 +11,15 @@ Appearance Plugin.
 """
 
 # Local imports
-from spyder.api.plugins import Plugins, SpyderPluginV2
 from spyder.api.plugin_registration.decorators import (
-    on_plugin_available, on_plugin_teardown)
+    on_plugin_available,
+    on_plugin_teardown,
+)
+from spyder.api.plugins import Plugins, SpyderPluginV2
 from spyder.api.translations import _
+from spyder.config.manager import CONF
 from spyder.plugins.appearance.confpage import AppearanceConfigPage
+from spyder.utils.theme_manager import theme_manager
 
 
 # --- Plugin
@@ -26,7 +30,7 @@ class Appearance(SpyderPluginV2):
     """
 
     NAME = "appearance"
-    # TODO: Fix requires to reflect the desired order in the preferences
+    # Appearance should load first among config plugins
     REQUIRES = [Plugins.Preferences]
     CONTAINER_CLASS = None
     CONF_SECTION = NAME
@@ -49,12 +53,12 @@ class Appearance(SpyderPluginV2):
         return cls.create_icon('eyedropper')
 
     def on_initialize(self):
-        # NOTES:
-        # 1. This avoids applying the color scheme twice at startup, which is
-        #    quite resource intensive.
-        # 2. Notifications for this option are restored when creating the
-        #    config page.
-        self.disable_conf('ui_mode')
+        """Initialize the appearance plugin."""
+        # Ensure theme names are populated in config for other plugins to use
+        # Get available theme variants and populate the names config
+        theme_variants = theme_manager.get_available_theme_variants()
+        if theme_variants:
+            CONF.set('appearance', 'names', theme_variants)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def register_preferences(self):

@@ -55,7 +55,6 @@ class AppearanceConfigPage(PluginConfigPage):
 
         # Notifications for this option are disabled when the plugin is
         # initialized, so we need to restore them here.
-        CONF.restore_notifications(section='appearance', option='ui_mode')
         CONF.restore_notifications(section='appearance', option='selected')
 
     def setup_page(self):
@@ -304,10 +303,9 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        # We need to restore notifications for these options so they can be
-        # changed when the user selects other values for them.
-        for option in ['selected', 'ui_mode']:
-            CONF.restore_notifications(section='appearance', option=option)
+        # We need to restore notifications for this option so it can be
+        # changed when the user selects other values for it.
+        CONF.restore_notifications(section='appearance', option='selected')
 
         self.update_combobox()
         self.update_editor_preview()
@@ -474,11 +472,6 @@ class AppearanceConfigPage(PluginConfigPage):
             
             # Save the selected theme
             self.set_option('selected', scheme)
-            
-            # Update ui_mode based on selected theme variant
-            if '/' in scheme:
-                _, ui_mode = scheme.rsplit('/', 1)
-                self.set_option('ui_mode', ui_mode)
         except Exception:
             # Ignore errors during initialization
             pass

@@ -31,7 +31,8 @@ class MainInterpreter(SpyderPluginV2):
     """
 
     NAME = "main_interpreter"
-    REQUIRES = [Plugins.Preferences]
+    # MainInterpreter should load after Application
+    REQUIRES = [Plugins.Preferences, Plugins.Application]
     CONTAINER_CLASS = MainInterpreterContainer
     CONF_WIDGET_CLASS = MainInterpreterConfigPage
     CONF_SECTION = NAME

@@ -130,7 +130,8 @@ def is_dark_interface():
         _, ui_mode = selected.rsplit("/", 1)
         return ui_mode == "dark"
     
-    return CONF.get("appearance", "ui_mode", "dark") == "dark"
+    # Default to dark if no mode specified (shouldn't happen with new themes)
+    return True
 
 
 #==============================================================================
