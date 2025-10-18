@@ -303,10 +303,12 @@ class AppearanceConfigPage(PluginConfigPage):
                 plugin.update_font()
 
     def apply_settings(self):
-        # Save the currently selected theme to config
+        # Only save theme if it actually changed
         try:
-            scheme = self.current_scheme
-            self.set_option('selected', scheme)
+            current_scheme = self.current_scheme
+            saved_scheme = self.get_option('selected', default='')
+            if current_scheme != saved_scheme:
+                self.set_option('selected', current_scheme)
         except Exception:
             # Ignore errors if no theme is selected
             pass
@@ -314,6 +316,12 @@ class AppearanceConfigPage(PluginConfigPage):
         CONF.restore_notifications(section='appearance', option='selected')
         self.update_combobox()
         self.update_editor_preview()
+
+        # This applies font changes to all open editors immediately
+        # Fixes spyder-ide/spyder#22693
+        for plugin_name in PLUGIN_REGISTRY:
+            plugin = PLUGIN_REGISTRY.get_plugin(plugin_name)
+            plugin.update_font()
 
         return set(self.changed_options)
 
