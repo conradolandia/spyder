@@ -557,14 +557,6 @@ class AppearanceConfigPage(PluginConfigPage):
             QMessageBox.Yes | QMessageBox.No,
         )
         if answer == QMessageBox.Yes:
-            # Put the combobox in Spyder by default, when deleting a scheme
-            names = self.get_option('names')
-            default_theme = 'spyder'
-            if self.is_dark_interface():
-                default_theme = 'spyder/dark'
-            self.schemes_combobox.setCurrentIndex(names.index(default_theme))
-            self.set_option('selected', default_theme)
-
             # Delete from custom_names
             custom_names = self.get_option('custom_names', [])
             if scheme_name in custom_names:
