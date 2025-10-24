@@ -18,7 +18,6 @@ from spyder.config.fonts import MEDIUM, MONOSPACE
 from spyder.plugins.help.utils.sphinxify import CSS_PATH
 
 
-
 class ThemeManager:
     """Manager for Spyder's theming system."""
 
@@ -33,23 +32,24 @@ class ThemeManager:
     def get_available_themes():
         """Get list of available themes from registered theme packages."""
         themes = []
-        
+
         # List of theme packages to search
         # Add more package names here as needed
-        theme_packages = ['spyder_themes']
-        
+        theme_packages = ["spyder_themes"]
+
         for package_name in theme_packages:
             try:
                 package = importlib.import_module(package_name)
-                if hasattr(package, 'THEMES') and hasattr(package, 'get_theme_module'):
+                if hasattr(package, "THEMES") and hasattr(package, "get_theme_module"):
                     # Iterate through registered themes
                     for theme_name in package.THEMES:
                         try:
                             theme_module = package.get_theme_module(theme_name)
                             # Validate theme has required attributes
-                            if hasattr(theme_module, 'THEME_ID') and \
-                               (hasattr(theme_module, 'SpyderPaletteDark') or \
-                                hasattr(theme_module, 'SpyderPaletteLight')):
+                            if hasattr(theme_module, "THEME_ID") and (
+                                hasattr(theme_module, "SpyderPaletteDark")
+                                or hasattr(theme_module, "SpyderPaletteLight")
+                            ):
                                 # Store full module path for loading
                                 themes.append(f"{package_name}.{theme_name}")
                         except (ImportError, AttributeError, ValueError):
@@ -58,7 +58,7 @@ class ThemeManager:
             except ImportError:
                 # Package not installed, skip
                 pass
-        
+
         return sorted(themes)
 
     @staticmethod
@@ -67,13 +67,13 @@ class ThemeManager:
         try:
             theme_module = importlib.import_module(theme_name)
             modes = []
-            if hasattr(theme_module, 'SpyderPaletteDark'):
-                modes.append('dark')
-            if hasattr(theme_module, 'SpyderPaletteLight'):
-                modes.append('light')
-            return modes if modes else ['dark', 'light']
+            if hasattr(theme_module, "SpyderPaletteDark"):
+                modes.append("dark")
+            if hasattr(theme_module, "SpyderPaletteLight"):
+                modes.append("light")
+            return modes if modes else ["dark", "light"]
         except ImportError:
-            return ['dark', 'light']
+            return ["dark", "light"]
 
     @staticmethod
     def get_available_theme_variants():
@@ -84,17 +84,17 @@ class ThemeManager:
                 variants.append(f"{theme_name}/{mode}")
 
         return sorted(variants)
-    
+
     @staticmethod
     def get_theme_display_name(theme_variant):
         """
         Get display name for a theme variant.
-        
+
         Parameters
         ----------
         theme_variant : str
             Theme variant in format 'package.theme/mode' (e.g., 'spyder_themes.dracula/dark')
-            
+
         Returns
         -------
         str
@@ -102,43 +102,53 @@ class ThemeManager:
         """
         try:
             # Extract base theme name and mode
-            if '/' in theme_variant:
-                theme_path, mode = theme_variant.rsplit('/', 1)
+            if "/" in theme_variant:
+                theme_path, mode = theme_variant.rsplit("/", 1)
             else:
                 theme_path = theme_variant
                 mode = None
-            
+
             # For package-based themes, extract the theme name from docstring
-            if '.' in theme_path:
+            if "." in theme_path:
                 # Import the theme module to get its metadata
                 theme_module = importlib.import_module(theme_path)
-                
+
                 # Extract theme name from docstring
-                if theme_module.__doc__ and 'Theme:' in theme_module.__doc__:
-                    lines = theme_module.__doc__.strip().split('\n')
+                if theme_module.__doc__ and "Theme:" in theme_module.__doc__:
+                    lines = theme_module.__doc__.strip().split("\n")
                     for line in lines:
-                        if line.strip().startswith('Theme:'):
-                            theme_name = line.split('Theme:')[1].strip()
+                        if line.strip().startswith("Theme:"):
+                            theme_name = line.split("Theme:")[1].strip()
                             break
                     else:
                         # Fallback: use last part of path
-                        theme_name = theme_path.split('.')[-1].replace('-', ' ').replace('_', ' ').title()
+                        theme_name = (
+                            theme_path.split(".")[-1]
+                            .replace("-", " ")
+                            .replace("_", " ")
+                            .title()
+                        )
                 else:
                     # Fallback: use last part of path
-                    theme_name = theme_path.split('.')[-1].replace('-', ' ').replace('_', ' ').title()
+                    theme_name = (
+                        theme_path.split(".")[-1]
+                        .replace("-", " ")
+                        .replace("_", " ")
+                        .title()
+                    )
             else:
                 # Old-style theme, just capitalize
                 theme_name = theme_path.capitalize()
-            
+
             # Add mode if present
             if mode:
                 return f"{theme_name} ({mode.title()})"
             else:
                 return theme_name
-                
+
         except Exception:
             # Ultimate fallback: just format the variant name
-            return theme_variant.replace('_', ' ').replace('.', ' ').title()
+            return theme_variant.replace("_", " ").replace(".", " ").title()
 
     def get_syntax_color_scheme(self, palette):
         """
@@ -217,11 +227,11 @@ class ThemeManager:
         else:
             # Use set_color_scheme for normal operation (when not forcing replacement)
             set_color_scheme(variant_name, color_scheme, replace=replace)
-        
+
         # Also save the display name for the theme variant
         display_name = ThemeManager.get_theme_display_name(variant_name)
         CONF.set("appearance", f"{variant_name}/name", display_name)
-        
+
         # Restore original theme if different from what we just exported
         if current_theme and current_theme != theme_name:
             try:
@@ -235,7 +245,7 @@ class ThemeManager:
     def export_all_themes_to_config(self):
         """
         Export all available theme variants to config file.
-        
+
         This ensures all themes are available in the config for the preferences UI
         and for users to customize. Only exports themes that don't already exist
         in the config (doesn't overwrite user customizations).
@@ -243,53 +253,55 @@ class ThemeManager:
         from spyder.config.manager import CONF
         from spyder.utils.syntaxhighlighters import COLOR_SCHEME_KEYS
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         # Remember the current theme to restore it after exporting all themes
         current_theme = self._current_theme
-        
+
         for theme_name in self.get_available_themes():
             for ui_mode in self.get_theme_modes(theme_name):
                 variant_name = f"{theme_name}/{ui_mode}"
-                
+
                 # Check if this theme variant exists and is complete in config
                 # For a theme to be considered complete, it needs all color keys
                 is_complete = True
                 try:
                     # Check for name first
                     CONF.get("appearance", f"{variant_name}/name")
-                    
+
                     # Then check for all required color keys
                     for key in COLOR_SCHEME_KEYS:
                         CONF.get("appearance", f"{variant_name}/{key}")
                 except Exception:
                     # If any check fails, the theme is incomplete
                     is_complete = False
-                
+
                 if not is_complete:
                     # Theme doesn't exist or is incomplete, we need to load it first
                     # to get its proper colors, then export
                     try:
-                        # Load the theme palette without auto-exporting 
+                        # Load the theme palette without auto-exporting
                         # (using internal method to avoid circular calls)
                         palette, _ = self._load_theme_internal(theme_name, ui_mode)
-                        
+
                         # Now manually extract colors from the correct palette and save to config
                         color_scheme = self.get_syntax_color_scheme(palette)
-                        
+
                         # Import here to avoid circular dependency
                         from spyder.config.gui import set_color_scheme
+
                         set_color_scheme(variant_name, color_scheme, replace=False)
-                        
+
                         # Set the display name
                         display_name = ThemeManager.get_theme_display_name(variant_name)
                         CONF.set("appearance", f"{variant_name}/name", display_name)
-                        
+
                         logger.info(f"Exported theme {variant_name} to config")
                     except Exception as e:
                         # Log but don't fail if a theme can't be exported
                         logger.warning(f"Failed to export theme {variant_name}: {e}")
-        
+
         # Restore original theme if needed
         if current_theme and current_theme != self._current_theme:
             try:
@@ -304,23 +316,25 @@ class ThemeManager:
         """Load theme using standard package import."""
         if ui_mode is None:
             ui_mode = "dark" if is_dark_interface() else "light"
-        
+
         # Import theme module using full module path
         theme_module = importlib.import_module(theme_name)
-        
+
         # Get palette class
         if ui_mode == "dark":
-            if not hasattr(theme_module, 'SpyderPaletteDark'):
+            if not hasattr(theme_module, "SpyderPaletteDark"):
                 raise ValueError(f"Theme '{theme_name}' has no SpyderPaletteDark class")
             palette_class = theme_module.SpyderPaletteDark
         else:
-            if not hasattr(theme_module, 'SpyderPaletteLight'):
-                raise ValueError(f"Theme '{theme_name}' has no SpyderPaletteLight class")
+            if not hasattr(theme_module, "SpyderPaletteLight"):
+                raise ValueError(
+                    f"Theme '{theme_name}' has no SpyderPaletteLight class"
+                )
             palette_class = theme_module.SpyderPaletteLight
-        
+
         # Load stylesheet
         stylesheet = self._load_stylesheet(theme_name, ui_mode)
-        
+
         return palette_class, stylesheet
 
     def load_theme(self, theme_name, ui_mode=None):
@@ -351,11 +365,11 @@ class ThemeManager:
         # This approach bypasses any potential module caching issues
         # by using palette values directly from the loaded theme
         from spyder.config.manager import CONF
-                      
+
         # Map palette attributes to config keys
         palette_attrs = {
             "background": palette.EDITOR_BACKGROUND,
-            "currentline": palette.EDITOR_CURRENTLINE, 
+            "currentline": palette.EDITOR_CURRENTLINE,
             "currentcell": palette.EDITOR_CURRENTCELL,
             "occurrence": palette.EDITOR_OCCURRENCE,
             "ctrlclick": palette.EDITOR_CTRLCLICK,
@@ -372,13 +386,13 @@ class ThemeManager:
             "instance": palette.EDITOR_INSTANCE,
             "magic": palette.EDITOR_MAGIC,
         }
-        
+
         # Set all colors directly in the config
         variant_name = f"{theme_name}/{ui_mode}"
         for key, value in palette_attrs.items():
             option = f"{variant_name}/{key}"
             CONF.set("appearance", option, value)
-            
+
         # Also set the display name using the helper method
         display_name = ThemeManager.get_theme_display_name(variant_name)
         CONF.set("appearance", f"{variant_name}/name", display_name)
@@ -390,7 +404,7 @@ class ThemeManager:
         # Get theme module path
         theme_module = importlib.import_module(theme_name)
         theme_path = Path(theme_module.__path__[0])
-        
+
         # Construct stylesheet paths
         if ui_mode == "dark":
             qss_file = theme_path / "dark" / "darkstyle.qss"
