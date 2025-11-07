@@ -12,7 +12,8 @@ import os.path as osp
 import sys
 
 # Local imports
-from spyder.config.base import _, running_in_ci, is_conda_based_app
+from spyder.api.translations import _
+from spyder.config.base import running_in_ci, is_conda_based_app
 from spyder.utils import programs
 
 
@@ -72,8 +73,8 @@ QTAWESOME_REQVER = '>=1.4.0,<1.5.0'
 QTCONSOLE_REQVER = '>=5.7.0,<5.8.0'
 QTPY_REQVER = '>=2.4.0'
 RTREE_REQVER = '>=0.9.7'
-SPHINX_REQVER = '>=0.6.6'
-SPYDER_KERNELS_REQVER = '>=3.1.0b1,<3.1.0b2'
+SPHINX_REQVER = '>=7.2.0'
+SPYDER_KERNELS_REQVER = '>=3.1.0b1,<3.2.0a2'
 SUPERQT_REQVER = '>=0.6.2,<1.0.0'
 TEXTDISTANCE_REQVER = '>=4.2.0'
 THREE_MERGE_REQVER = '>=0.1.1'

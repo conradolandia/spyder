@@ -18,6 +18,7 @@ import functools
 import logging
 import os
 import os.path as osp
+import re
 from string import Template
 import time
 import traceback
@@ -73,11 +74,6 @@ TEMPLATES_PATH = osp.join(
 BLANK = open(osp.join(TEMPLATES_PATH, 'blank.html')).read()
 LOADING = open(osp.join(TEMPLATES_PATH, 'loading.html')).read()
 KERNEL_ERROR = open(osp.join(TEMPLATES_PATH, 'kernel_error.html')).read()
-
-try:
-    time.monotonic  # time.monotonic new in 3.3
-except AttributeError:
-    time.monotonic = time.time
 
 
 # ----------------------------------------------------------------------------
@@ -521,6 +517,9 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):  # noqa: PLR09
         if self.is_benign_error(error):
             return
 
+        if self.is_warning_message(error):
+            return
+
         InstallerIPythonKernelError(error)
 
         # Replace end of line chars with <br>
@@ -602,6 +601,11 @@ class ClientWidget(QWidget, SaveHistoryMixin, SpyderWidgetMixin):  # noqa: PLR09
         ]
 
         return any([err in error for err in benign_errors])
+
+    def is_warning_message(self, error):
+        """Decide if a message contains a warning in order to filter it."""
+        warning_pattern = re.compile(r"(?:^|\s)[A-Za-z]*Warning:")
+        return warning_pattern.search(error)
 
     def get_name(self):
         """Return client name"""

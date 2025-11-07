@@ -33,8 +33,9 @@ from spyder_kernels.utils.pythonenv import is_conda_env
 # Local imports
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
+from spyder.api.translations import _
 from spyder.api.widgets.mixins import SpyderWidgetMixin
-from spyder.config.base import _, running_under_pytest
+from spyder.config.base import running_under_pytest
 from spyder.config.manager import CONF
 from spyder.config.utils import (
     get_edit_filetypes, get_edit_filters, get_filter, is_kde_desktop
@@ -67,6 +68,7 @@ class EditorStackActions:
     CopyAbsolutePath = "copy_absolute_path_action"
     CopyRelativePath = "copy_relative_path_action"
     CloseAllRight = "close_all_rigth_action"
+    CloseAllLeft = "close_all_left_action"
     CloseAllButThis = "close_all_but_this_action"
     SortTabs = "sort_tabs_action"
     ShowInExternalFileExplorer = "show in external file explorer"
@@ -275,6 +277,12 @@ class EditorStack(QWidget, SpyderWidgetMixin):
             EditorStackActions.CloseAllRight,
             text=_("Close all to the right"),
             triggered=self.close_all_right,
+            register_action=False
+        )
+        self.close_left = self.create_action(
+            EditorStackActions.CloseAllLeft,
+            text=_("Close all to the left"),
+            triggered=self.close_all_left,
             register_action=False
         )
         self.close_all_but_this = self.create_action(
@@ -786,6 +794,16 @@ class EditorStack(QWidget, SpyderWidgetMixin):
         self.send_to_help(name, help_text, force=True)
 
     # ---- Editor Widget Settings
+    @on_conf_change(
+        option=("provider_configuration", "lsp", "values", "pyflakes"),
+        section='completions',
+    )
+    def on_pyflakes_enabled_change(self, value):
+        if self.data:
+            for finfo in self.data:
+                if finfo.editor.is_python_like():
+                    finfo.editor.pyflakes_linting_enabled = value
+
     @on_conf_change(section='help', option='connect/editor')
     def on_help_connection_change(self, value):
         self.set_help_enabled(value)
@@ -1344,6 +1362,7 @@ class EditorStack(QWidget, SpyderWidgetMixin):
             # close and order section
             close_order_actions = [
                 self.close_right,
+                self.close_left,
                 self.close_all_but_this,
                 self.sort_tabs
             ]
@@ -1738,6 +1757,12 @@ class EditorStack(QWidget, SpyderWidgetMixin):
         n = self.get_stack_count()
         for __ in range(num, n - 1):
             self.close_file(num + 1)
+
+    def close_all_left(self):
+        """Close all files opened to the left."""
+        n = self.get_stack_index()
+        for __ in range(n):
+            self.close_file(0)
 
     def on_close_all_but_this(self):
         """Close all files but the current one"""

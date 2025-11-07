@@ -23,8 +23,8 @@ from qtpy.QtWidgets import (
 
 # Local import
 from spyder.api.fonts import SpyderFontsMixin, SpyderFontType
+from spyder.api.translations import _
 from spyder.api.widgets.mixins import SpyderWidgetMixin
-from spyder.config.base import _
 from spyder.utils.icon_manager import ima
 from spyder.plugins.variableexplorer.widgets.basedialog import BaseDialog
 
@@ -194,7 +194,7 @@ class TextEditor(BaseDialog, SpyderWidgetMixin, SpyderFontsMixin):
     def setup_and_check(self, value):
         """Verify if TextEditor is able to display strings passed to it."""
         try:
-            if not isinstance(obj, str):
+            if not isinstance(value, str):
                 str(value, 'utf8')
             return True
         except Exception:

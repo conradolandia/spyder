@@ -250,6 +250,11 @@ class SpyderRemoteAPIManagerBase(metaclass=ABCMeta):
         try:
             if await self._start_remote_server():
                 self.__starting_event.set()
+                # emit signal that connection and server are established
+                if self._plugin:
+                    self._plugin.sig_connection_established.emit(
+                        self.config_id
+                    )
                 return True
         finally:
             self.__starting_server = False
@@ -326,11 +331,13 @@ class SpyderRemoteAPIManagerBase(metaclass=ABCMeta):
                 self.__connection_task.cancel()
                 abort_task.cancel()
                 self.__connection_task = None
+
                 self.logger.debug("Connection attempt aborted by user")
                 self._emit_connection_status(
                     ConnectionStatus.Inactive,
                     _("The connection attempt was cancelled"),
                 )
+
                 return False
 
             # Connection completed
@@ -345,6 +352,13 @@ class SpyderRemoteAPIManagerBase(metaclass=ABCMeta):
                 self.logger.exception(
                     "Error creating a new connection for %s", self.server_name
                 )
+
+                # Cancel and reset connection tasks to allow re-tries after
+                # errors
+                self.__connection_task.cancel()
+                abort_task.cancel()
+                self.__connection_task = None
+
                 self._emit_connection_status(
                     ConnectionStatus.Error,
                     _("There was an error establishing the connection"),
