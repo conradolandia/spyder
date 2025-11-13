@@ -30,17 +30,30 @@ def _get_theme_palette():
         SpyderPalette class from the loaded theme, or None if loading fails.
     """
     try:
+        # Check if config is ready before trying to use it
+        from spyder.config.base import _is_conf_ready
+        
         # Export all available themes to config BEFORE loading the selected theme
         # This ensures all themes are properly populated with their own colors
         # even when config file is new/reset
-        try:
-            theme_manager.export_all_themes_to_config()
-        except Exception as theme_exp:
-            logger.warning(f"Failed to export all themes to config: {theme_exp}")
+        # Only do this if config is ready to avoid segfaults
+        if _is_conf_ready():
+            try:
+                theme_manager.export_all_themes_to_config()
+            except Exception as theme_exp:
+                logger.warning(f"Failed to export all themes to config: {theme_exp}")
             
-        # Get selected theme from config
-        from spyder.config.manager import CONF
-        selected = CONF.get("appearance", "selected", default="qdarkstyle/dark")
+            # Get selected theme from config
+            try:
+                from spyder.config.manager import CONF
+                selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+            except (AttributeError, ImportError, RuntimeError, OSError) as conf_error:
+                logger.warning(f"Config not available yet, using default theme: {conf_error}")
+                selected = "spyder_themes.spyder/dark"
+        else:
+            # Config not ready, use default theme
+            logger.debug("Config not ready yet, using default theme")
+            selected = "spyder_themes.spyder/dark"
         
         # Parse theme name and mode from the selected variant
         if "/" in selected:
@@ -61,16 +74,60 @@ def _get_theme_palette():
 
     except Exception as e:
         logger.error(f"Failed to load theme from config: {e}")
-        return None
+        # Try to load default theme as fallback
+        try:
+            logger.info("Attempting to load default theme as fallback")
+            palette_class, _ = theme_manager.load_theme("spyder_themes.spyder", "dark")
+            return palette_class
+        except Exception as fallback_error:
+            logger.error(f"Failed to load default theme: {fallback_error}")
+            # Return None instead of raising - let __getattr__ handle it
+            return None
 
 
 # =============================================================================
 # ---- Exported classes
 # =============================================================================
 
-# Try to get palette from theme manager first, fall back to original logic
-_theme_palette = _get_theme_palette()
+# Lazy loading: don't load palette at import time to avoid accessing config
+# before it's initialized. Load it on first access instead.
+_theme_palette = None
+_theme_palette_loaded = False
 
-if _theme_palette is not None:
-    # Use theme manager palette
-    SpyderPalette = _theme_palette
+
+def __getattr__(name):
+    """
+    Lazy loading of SpyderPalette to avoid accessing config at import time.
+    
+    This function is called when an attribute is accessed that doesn't exist
+    in the module's __dict__. This allows us to defer loading the palette
+    until it's actually needed, avoiding segfaults when config isn't ready.
+    """
+    global _theme_palette, _theme_palette_loaded
+    
+    if name == 'SpyderPalette':
+        if not _theme_palette_loaded:
+            _theme_palette_loaded = True
+            try:
+                _theme_palette = _get_theme_palette()
+            except Exception as e:
+                logger.error(f"Error loading theme palette: {e}")
+                _theme_palette = None
+            
+            if _theme_palette is not None:
+                return _theme_palette
+            else:
+                # If theme loading completely fails, raise an error with helpful message
+                raise ImportError(
+                    "Failed to load SpyderPalette. Please ensure spyder_themes package is "
+                    "installed and contains the 'spyder' theme."
+                )
+        elif _theme_palette is not None:
+            return _theme_palette
+        else:
+            raise ImportError(
+                "Failed to load SpyderPalette. Please ensure spyder_themes package is "
+                "installed and contains the 'spyder' theme."
+            )
+    
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

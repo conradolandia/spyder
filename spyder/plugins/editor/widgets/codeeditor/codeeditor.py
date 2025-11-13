@@ -357,9 +357,16 @@ class CodeEditor(LSPMixin, TextEditBaseWidget, MultiCursorMixin):
 
         self.highlighter_class = sh.TextSH
         self.highlighter = None
-        ccs = 'Spyder'
-        if ccs not in sh.COLOR_SCHEME_NAMES:
-            ccs = sh.COLOR_SCHEME_NAMES[0]
+        # Always use the selected theme from config, not a hardcoded fallback
+        from spyder.config.manager import CONF
+        from spyder.config.base import _is_conf_ready
+        if _is_conf_ready():
+            try:
+                ccs = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
+            except Exception:
+                ccs = 'spyder_themes.spyder/dark'
+        else:
+            ccs = 'spyder_themes.spyder/dark'
         self.color_scheme = ccs
 
         self.highlight_current_line_enabled = False

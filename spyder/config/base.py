@@ -115,23 +115,58 @@ def use_dev_config_dir(use_dev_config_dir=USE_DEV_CONFIG_DIR):
     return use_dev_config_dir
 
 
+def _is_conf_ready():
+    """
+    Check if CONF is initialized and ready to use.
+    
+    Returns
+    -------
+    bool
+        True if CONF is ready, False otherwise.
+    """
+    try:
+        # Check if CONF module is in sys.modules first
+        if 'spyder.config.manager' not in sys.modules:
+            return False
+        
+        from spyder.config.manager import CONF
+        # Check if CONF has been initialized by checking for _user_config
+        # Also check if it's actually a ConfigurationManager instance
+        return (hasattr(CONF, '_user_config') and 
+                CONF._user_config is not None and
+                hasattr(CONF, 'get'))
+    except (AttributeError, ImportError, RuntimeError):
+        return False
+
+
 def is_dark_interface():
     """
     Check if current interface is dark mode.
     
     Determines the interface mode by inspecting the selected theme variant.
     Theme variants follow the format 'theme_name/mode' (e.g., 'solarized/dark').
+    Returns True if config is not ready to avoid segfaults during initialization.
     """
-    from spyder.config.manager import CONF
+    # Don't access config if it's not ready to avoid segfaults
+    if not _is_conf_ready():
+        return True
     
-    selected = CONF.get("appearance", "selected", "qdarkstyle/dark")
-    
-    if "/" in selected:
-        _, ui_mode = selected.rsplit("/", 1)
-        return ui_mode == "dark"
-    
-    # Default to dark if no mode specified (shouldn't happen with new themes)
-    return True
+    try:
+        from spyder.config.manager import CONF
+        
+        # Use default value if config doesn't exist or isn't initialized yet
+        selected = CONF.get("appearance", "selected", "spyder_themes.spyder/dark")
+        
+        if "/" in selected:
+            _, ui_mode = selected.rsplit("/", 1)
+            return ui_mode == "dark"
+        
+        # Default to dark if no mode specified (shouldn't happen with new themes)
+        return True
+    except (AttributeError, ImportError, RuntimeError, OSError):
+        # If CONF is not initialized, config file doesn't exist, or there's
+        # an error accessing it, default to dark mode
+        return True
 
 
 #==============================================================================

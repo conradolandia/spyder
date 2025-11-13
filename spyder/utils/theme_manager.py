@@ -27,6 +27,7 @@ class ThemeManager:
         self._current_stylesheet = None
         self._current_theme_module = None  # Store the loaded theme module
         self._loaded_resource_modules = {}  # Keep references to resource modules
+        self._pending_resource_files = []  # Resource files to load after Qt is initialized
 
     @staticmethod
     def get_available_themes():
@@ -418,16 +419,37 @@ class ThemeManager:
                 f"Stylesheet not found for theme '{theme_name}' in {ui_mode} mode"
             )
 
-        # Load the resources if they exist
+        # Load the resources if they exist, but defer loading until Qt is initialized
+        # Loading resources before Qt is ready can cause segfaults during Qt initialization
         if rc_file.exists():
-            self._load_theme_resources(rc_file)
+            # Store the resource file path for later loading
+            # Don't load it now to avoid segfaults during Qt initialization
+            # We'll load it later when Qt is fully initialized
+            if not hasattr(self, '_pending_resource_files'):
+                self._pending_resource_files = []
+            if rc_file not in self._pending_resource_files:
+                self._pending_resource_files.append(rc_file)
 
         with open(qss_file, "r", encoding="utf-8") as f:
             return f.read()
 
     def _load_theme_resources(self, rc_file):
-        """Load theme resources into Qt resource system."""
+        """
+        Load theme resources into Qt resource system.
+        
+        This should only be called after Qt is fully initialized to avoid segfaults.
+        """
         try:
+            # Double-check that Qt is initialized before loading resources
+            from qtpy.QtWidgets import QApplication
+            if QApplication.instance() is None:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(
+                    f"QApplication not initialized, skipping resource loading for {rc_file}"
+                )
+                return
+            
             # Import the resource module directly (like QDarkStyleSheet does)
             import importlib.util
             import logging
@@ -459,6 +481,22 @@ class ThemeManager:
     def get_current_stylesheet(self):
         """Get the currently loaded stylesheet."""
         return self._current_stylesheet
+    
+    def load_pending_resources(self):
+        """
+        Load any pending theme resources that were deferred during initialization.
+        
+        This should be called after Qt is fully initialized to avoid segfaults.
+        """
+        if hasattr(self, '_pending_resource_files') and self._pending_resource_files:
+            for rc_file in list(self._pending_resource_files):
+                try:
+                    self._load_theme_resources(rc_file)
+                    self._pending_resource_files.remove(rc_file)
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Failed to load pending resource {rc_file}: {e}")
 
 
 # Global appearance object
@@ -487,8 +525,8 @@ APPEARANCE = {
     "monospace_app_font/bold": False,
     # List of available theme variants (will be populated dynamically)
     "names": [],
-    # Default to qdarkstyle/dark if no selection exists
-    "selected": "qdarkstyle/dark",
+    # Default to spyder_themes.spyder/dark if no selection exists
+    "selected": "spyder_themes.spyder/dark",
 }
 
 

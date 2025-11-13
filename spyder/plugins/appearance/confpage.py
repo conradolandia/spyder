@@ -366,7 +366,7 @@ class AppearanceConfigPage(PluginConfigPage):
     def update_combobox(self):
         """Recreates the combobox contents."""
         # Save currently selected theme (not index, since order may change)
-        current_scheme = self.get_option('selected', default='spyder_themes.qdarkstyle/dark')
+        current_scheme = self.get_option('selected', default='spyder_themes.spyder/dark')
         
         self.schemes_combobox.blockSignals(True)
         
@@ -410,8 +410,8 @@ class AppearanceConfigPage(PluginConfigPage):
         # Find and select the current theme (by value, not index)
         index = combobox.findData(current_scheme)
         if index == -1:
-            # Theme not found, default to qdarkstyle/dark
-            index = combobox.findData('spyder_themes.qdarkstyle/dark')
+            # Theme not found, default to spyder/dark
+            index = combobox.findData('spyder_themes.spyder/dark')
         if index == -1:
             # Still not found, just use first item
             index = 0

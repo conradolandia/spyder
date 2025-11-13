@@ -376,15 +376,15 @@ class EditorStack(QWidget, SpyderWidgetMixin):
         }
 
         # Set default color scheme from config
-        color_scheme = CONF.get("appearance", "selected", "qdarkstyle/dark")
-        
-        # Fallback if the selected theme is not available yet
-        if color_scheme not in syntaxhighlighters.COLOR_SCHEME_NAMES:
-            if syntaxhighlighters.COLOR_SCHEME_NAMES:
-                color_scheme = syntaxhighlighters.COLOR_SCHEME_NAMES[0]
-            else:
-                # No themes loaded yet, use the default theme
-                color_scheme = "qdarkstyle/dark"
+        # Always use the selected theme from config, don't fall back to first in list
+        from spyder.config.base import _is_conf_ready
+        if _is_conf_ready():
+            try:
+                color_scheme = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+            except Exception:
+                color_scheme = 'spyder_themes.spyder/dark'
+        else:
+            color_scheme = 'spyder_themes.spyder/dark'
         self.color_scheme = color_scheme
 
         # Real-time code analysis

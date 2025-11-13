@@ -156,22 +156,46 @@ def main():
         return
 
     from spyder.config.manager import CONF
+    from spyder.config.base import _is_conf_ready
 
     # Store variable to be used in self.restart (restart spyder instance)
     os.environ['SPYDER_ARGS'] = str(sys.argv[1:])
+    
+    # Export all themes to config early to ensure colors are available
+    # before any editor widgets are created (fixes first-run color issues)
+    if _is_conf_ready():
+        try:
+            from spyder.utils.theme_manager import theme_manager
+            theme_manager.export_all_themes_to_config()
+        except Exception as e:
+            # Don't fail startup if theme export fails, but log it
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to export themes to config during startup: {e}")
 
     #==========================================================================
     # Proper high DPI scaling is available in Qt >= 5.6.0. This attribute must
     # be set before creating the application.
     #==========================================================================
-    if CONF.get('main', 'high_dpi_custom_scale_factor'):
-        factors = str(CONF.get('main', 'high_dpi_custom_scale_factors'))
-        f = list(filter(None, factors.split(';')))
-        if len(f) == 1:
-            os.environ['QT_SCALE_FACTOR'] = f[0]
-        else:
-            os.environ['QT_SCREEN_SCALE_FACTORS'] = factors
+    # Only access config if it's ready to avoid segfaults during initialization
+    if _is_conf_ready():
+        try:
+            if CONF.get('main', 'high_dpi_custom_scale_factor'):
+                factors = str(CONF.get('main', 'high_dpi_custom_scale_factors'))
+                f = list(filter(None, factors.split(';')))
+                if len(f) == 1:
+                    os.environ['QT_SCALE_FACTOR'] = f[0]
+                else:
+                    os.environ['QT_SCREEN_SCALE_FACTORS'] = factors
+            else:
+                os.environ['QT_SCALE_FACTOR'] = ''
+                os.environ['QT_SCREEN_SCALE_FACTORS'] = ''
+        except Exception:
+            # If config access fails, use defaults
+            os.environ['QT_SCALE_FACTOR'] = ''
+            os.environ['QT_SCREEN_SCALE_FACTORS'] = ''
     else:
+        # Config not ready, use defaults
         os.environ['QT_SCALE_FACTOR'] = ''
         os.environ['QT_SCREEN_SCALE_FACTORS'] = ''
 
@@ -229,7 +253,15 @@ def main():
         sys.stdout.write('\n')
         return
 
-    if (CONF.get('main', 'single_instance') and not options.new_instance
+    # Check if config is ready before accessing it
+    single_instance = False
+    if _is_conf_ready():
+        try:
+            single_instance = CONF.get('main', 'single_instance', False)
+        except Exception:
+            single_instance = False
+    
+    if (single_instance and not options.new_instance
             and not options.reset_config_files):
         # Minimal delay (0.1-0.2 secs) to avoid that several
         # instances started at the same time step in their

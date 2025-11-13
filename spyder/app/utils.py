@@ -288,6 +288,15 @@ def create_application():
     """Create application and patch sys.exit."""
     # Our QApplication
     app = qapplication()
+    
+    # Load any pending theme resources that were deferred during initialization
+    # This must be done after Qt is initialized to avoid segfaults
+    try:
+        from spyder.utils.theme_manager import theme_manager
+        theme_manager.load_pending_resources()
+    except Exception:
+        # If loading resources fails, continue anyway
+        pass
 
     # ---- Set icon
     app_icon = QIcon(get_image_path("spyder"))

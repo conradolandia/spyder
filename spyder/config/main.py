@@ -21,7 +21,18 @@ from spyder.config.base import CHECK_ALL, EXCLUDED_NAMES
 from spyder.config.utils import IMPORT_EXT
 from spyder.plugins.editor.utils.findtasks import TASKS_PATTERN
 from spyder.utils.introspection.module_completion import PREFERRED_MODULES
-from spyder.utils.theme_manager import APPEARANCE
+
+
+# Import APPEARANCE lazily to avoid circular dependency during config initialization
+def _get_appearance_defaults():
+    """
+    Get appearance defaults lazily to avoid circular dependency.
+    
+    This function imports APPEARANCE only when called, avoiding issues
+    when config is being initialized.
+    """
+    from spyder.utils.theme_manager import APPEARANCE
+    return APPEARANCE
 
 
 # =============================================================================
@@ -618,7 +629,7 @@ DEFAULTS = [
               # -- Find --
               'find_in_files/find in files': 'Alt+Shift+F',
               }),
-            ('appearance', APPEARANCE),
+            ('appearance', _get_appearance_defaults()),
             ]
 
 
