@@ -87,6 +87,28 @@ class ThemeManager:
         return sorted(variants)
 
     @staticmethod
+    def normalize_theme_name(theme_name):
+        """
+        Normalize a theme name to the correct format.
+        
+        Ensures theme names have the 'spyder_themes.' prefix if they don't already.
+        Handles both old format (e.g., 'spyder') and new format (e.g., 'spyder_themes.spyder').
+        
+        Parameters
+        ----------
+        theme_name : str
+            Theme name in any format
+            
+        Returns
+        -------
+        str
+            Normalized theme name with 'spyder_themes.' prefix
+        """
+        if not theme_name.startswith('spyder_themes.'):
+            return f'spyder_themes.{theme_name}'
+        return theme_name
+    
+    @staticmethod
     def get_theme_display_name(theme_variant):
         """
         Get display name for a theme variant.

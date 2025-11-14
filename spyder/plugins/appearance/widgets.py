@@ -151,8 +151,17 @@ class SchemeEditor(QDialog):
         parent = self.parent
         
         # All themes (new and old) now have a 'name' field in config
+        # Provide a default value to avoid errors when the option doesn't exist yet
+        # The default will be the display name from the theme manager
+        try:
+            from spyder.utils.theme_manager import theme_manager
+            default_name = theme_manager.get_theme_display_name(scheme_name)
+        except Exception:
+            # Fallback to scheme_name if we can't get display name
+            default_name = scheme_name
+        
         self.line_edit = parent.create_lineedit(
-            _("Theme name:"), '{0}/name'.format(scheme_name)
+            _("Theme name:"), '{0}/name'.format(scheme_name), default=default_name
         )
 
         self.widgets[scheme_name] = {}

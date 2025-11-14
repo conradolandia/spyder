@@ -56,9 +56,113 @@ class AppearanceConfigPage(PluginConfigPage):
         # Notifications for this option are disabled when the plugin is
         # initialized, so we need to restore them here.
         CONF.restore_notifications(section='appearance', option='selected')
+        
+        # Lazy initialization: populate theme names in config if not already done
+        # This must happen before load_from_conf() is called
+        try:
+            names = CONF.get("appearance", "names", default=[])
+            if not names:
+                # First time - discover all themes and populate names
+                # This will export theme names to config, but won't load all resources
+                from spyder.utils.theme_manager import theme_manager
+                theme_variants = theme_manager.get_available_theme_variants()
+                if theme_variants:
+                    # Export all theme names to config (but not full themes to avoid loading resources)
+                    for variant_name in theme_variants:
+                        try:
+                            # Check if name already exists
+                            CONF.get("appearance", f"{variant_name}/name")
+                        except Exception:
+                            # Name doesn't exist, set it
+                            display_name = theme_manager.get_theme_display_name(variant_name)
+                            CONF.set("appearance", f"{variant_name}/name", display_name)
+                    # Set the names list
+                    CONF.set("appearance", "names", theme_variants)
+            
+            # Also ensure the selected theme has its name set (in case it's missing)
+            try:
+                selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+                # Handle both old format (spyder/dark) and new format (spyder_themes.spyder/dark)
+                if selected and '/' in selected:
+                    try:
+                        CONF.get("appearance", f"{selected}/name")
+                    except Exception:
+                        # Name doesn't exist, set it
+                        from spyder.utils.theme_manager import theme_manager
+                        display_name = theme_manager.get_theme_display_name(selected)
+                        CONF.set("appearance", f"{selected}/name", display_name)
+            except Exception:
+                pass
+        except Exception:
+            # If discovery fails, continue anyway - will be handled in setup_page
+            pass
 
     def setup_page(self):
-        names = self.get_option("names")
+        # Lazy initialization: populate theme names in config if not already done
+        # This only happens when preferences are opened, not at startup
+        from spyder.utils.theme_manager import theme_manager
+        
+        names = self.get_option("names", default=[])
+        
+        # Filter out old format names (those without spyder_themes. prefix)
+        # and convert them to new format if possible
+        filtered_names = []
+        original_names_count = len(names)
+        for name in names:
+            if '/' in name and not name.startswith('spyder_themes.'):
+                # Old format like "spyder/dark" - try to convert to new format
+                theme_part, mode = name.rsplit('/', 1)
+                normalized_theme = theme_manager.normalize_theme_name(theme_part)
+                new_name = f"{normalized_theme}/{mode}"
+                # Check if the new format theme exists
+                try:
+                    theme_manager.get_theme_display_name(new_name)
+                    filtered_names.append(new_name)
+                    # Also ensure the old format name is removed from config if it exists
+                    try:
+                        CONF.remove_option("appearance", f"{name}/name")
+                    except Exception:
+                        pass
+                except Exception:
+                    # New format doesn't exist, skip this theme
+                    pass
+            else:
+                # Already in new format or custom theme
+                filtered_names.append(name)
+        
+        names = filtered_names
+        
+        # Update config with filtered names if we filtered any out
+        if len(filtered_names) != original_names_count:
+            CONF.set("appearance", "names", filtered_names)
+        
+        if not names:
+            # First time opening preferences - discover all themes and populate names
+            # This will export theme names to config, but won't load all resources
+            # since we're only calling get_available_theme_variants() which discovers
+            # themes but doesn't load their resources
+            try:
+                theme_variants = theme_manager.get_available_theme_variants()
+                if theme_variants:
+                    # Export all theme names to config (but not full themes to avoid loading resources)
+                    for variant_name in theme_variants:
+                        try:
+                            # Check if name already exists
+                            CONF.get("appearance", f"{variant_name}/name")
+                        except Exception:
+                            # Name doesn't exist, set it
+                            display_name = theme_manager.get_theme_display_name(variant_name)
+                            CONF.set("appearance", f"{variant_name}/name", display_name)
+                    # Set the names list
+                    CONF.set("appearance", "names", theme_variants)
+                    names = theme_variants
+            except Exception as e:
+                # If discovery fails, use empty list and let it fail gracefully
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to discover themes: {e}")
+                names = []
+        
         try:
             names.pop(names.index(u'Custom'))
         except ValueError:

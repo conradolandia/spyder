@@ -33,15 +33,20 @@ def _get_theme_palette():
         # Check if config is ready before trying to use it
         from spyder.config.base import _is_conf_ready
         
-        # Export all available themes to config BEFORE loading the selected theme
-        # This ensures all themes are properly populated with their own colors
-        # even when config file is new/reset
+        # Export only the selected theme to config BEFORE loading it
+        # This ensures the selected theme's colors are available
+        # Don't export all themes as it loads all theme resources unnecessarily
         # Only do this if config is ready to avoid segfaults
         if _is_conf_ready():
             try:
-                theme_manager.export_all_themes_to_config()
+                from spyder.config.manager import CONF
+                selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+                if '/' in selected:
+                    theme_name, ui_mode = selected.rsplit('/', 1)
+                    theme_name = theme_manager.normalize_theme_name(theme_name)
+                    theme_manager.export_theme_to_config(theme_name, ui_mode, replace=True)
             except Exception as theme_exp:
-                logger.warning(f"Failed to export all themes to config: {theme_exp}")
+                logger.warning(f"Failed to export selected theme to config: {theme_exp}")
             
             # Get selected theme from config
             try:
@@ -63,10 +68,8 @@ def _get_theme_palette():
             theme_name = selected
             ui_mode = "dark"
         
-        # Handle old theme names by mapping them to new package format
-        if not theme_name.startswith('spyder_themes.'):
-            # Map old theme names to new package format
-            theme_name = f"spyder_themes.{theme_name}"
+        # Normalize theme name to ensure correct format
+        theme_name = theme_manager.normalize_theme_name(theme_name)
         
         # Load the theme
         palette_class, _ = theme_manager.load_theme(theme_name, ui_mode)

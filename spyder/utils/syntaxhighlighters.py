@@ -163,6 +163,11 @@ def get_color_scheme(name):
         # No name provided, use currently selected theme
         original_name = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
     
+    # Debug: log what we're getting colors for
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(f"get_color_scheme called with name={name}, original_name={original_name}")
+    
     # Normalize name for comparison (but use original_name for config keys)
     if name:
         name = name.lower()
@@ -171,21 +176,42 @@ def get_color_scheme(name):
     
     # Check if this is a new theme variant (contains '/')
     if '/' in original_name:
-        # For first run, always get colors directly from theme manager to ensure consistency
-        # Don't trust config on first run as it might have partial/mixed data
+        # Always get colors directly from theme manager for theme variants
+        # This ensures we get the correct colors from the theme package, not from config
+        # Config is only used to store user customizations, but on first run we should
+        # always use the theme package directly
         try:
             from spyder.utils.theme_manager import theme_manager
             theme_name, ui_mode = original_name.rsplit('/', 1)
+            theme_name = theme_manager.normalize_theme_name(theme_name)
             
-            # Always get colors from theme manager on first access to ensure consistency
-            # This avoids issues where config might have partial/mixed data from multiple themes
             # Get colors directly from theme manager (most reliable source)
+            # This loads from the installed theme package, not from config
+            # Use _load_theme_internal to bypass any caching and ensure we get the correct theme
             palette, _ = theme_manager._load_theme_internal(theme_name, ui_mode)
+            
+            # Verify we got the right theme by checking the palette
+            # (palette should have theme-specific colors)
             color_scheme = theme_manager.get_syntax_color_scheme(palette)
             
-            # Export to config for next time (but don't block on it)
+            # Debug: log which theme we're loading (can be removed later)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Loading color scheme from theme: {theme_name}/{ui_mode}, background color: {color_scheme.get('background', 'N/A')}")
+            
+            # Export to config for next time so user customizations can be saved
+            # But we always use the theme package as the source of truth
+            # Export using the original_name format so it matches what will be read later
             try:
+                # Export with the theme_name (spyder_themes.spyder) and ui_mode
                 theme_manager.export_theme_to_config(theme_name, ui_mode, replace=True)
+                # Also export with the original_name format if it's different
+                # This ensures config keys match what will be read later
+                if original_name != f"{theme_name}/{ui_mode}":
+                    # If original_name was different (e.g., "spyder/dark" vs "spyder_themes.spyder/dark"),
+                    # we need to also save it with that format for backward compatibility
+                    from spyder.config.gui import set_color_scheme
+                    set_color_scheme(original_name, color_scheme, replace=True)
             except Exception:
                 pass  # Don't fail if export doesn't work
             

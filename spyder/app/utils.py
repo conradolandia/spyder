@@ -11,6 +11,7 @@ import glob
 import logging
 import os
 import os.path as osp
+from pathlib import Path
 import re
 import sys
 
@@ -291,8 +292,30 @@ def create_application():
     
     # Load any pending theme resources that were deferred during initialization
     # This must be done after Qt is initialized to avoid segfaults
+    # Only load resources for the selected theme to avoid loading all themes unnecessarily
     try:
         from spyder.utils.theme_manager import theme_manager
+        from spyder.config.manager import CONF
+        from spyder.config.base import _is_conf_ready
+        if _is_conf_ready():
+            # Only load resources for the selected theme
+            selected = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
+            if '/' in selected:
+                theme_name, ui_mode = selected.rsplit('/', 1)
+                theme_name = theme_manager.normalize_theme_name(theme_name)
+                # Load only the selected theme's resources
+                try:
+                    theme_module = __import__(theme_name, fromlist=[''])
+                    theme_path = Path(theme_module.__path__[0])
+                    if ui_mode == "dark":
+                        rc_file = theme_path / "dark" / "pyqt5_darkstyle_rc.py"
+                    else:
+                        rc_file = theme_path / "light" / "pyqt5_lightstyle_rc.py"
+                    if rc_file.exists():
+                        theme_manager._load_theme_resources(rc_file)
+                except Exception:
+                    pass
+        # Also load any other pending resources (but this should be minimal now)
         theme_manager.load_pending_resources()
     except Exception:
         # If loading resources fails, continue anyway

@@ -54,11 +54,10 @@ class Appearance(SpyderPluginV2):
 
     def on_initialize(self):
         """Initialize the appearance plugin."""
-        # Ensure theme names are populated in config for other plugins to use
-        # Get available theme variants and populate the names config
-        theme_variants = theme_manager.get_available_theme_variants()
-        if theme_variants:
-            CONF.set('appearance', 'names', theme_variants)
+        # Don't discover all themes at startup - this loads all theme resources unnecessarily
+        # Theme names will be populated lazily when the preferences page is opened
+        # or when themes are actually needed
+        pass
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def register_preferences(self):
