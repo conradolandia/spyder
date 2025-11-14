@@ -406,26 +406,41 @@ class AppearanceConfigPage(PluginConfigPage):
             for plugin in plugins:
                 plugin.update_font()
 
-    def apply_settings(self):
-        # Only save theme if it actually changed
-        try:
-            current_scheme = self.current_scheme
-            saved_scheme = self.get_option('selected', default='')
-            if current_scheme != saved_scheme:
-                self.set_option('selected', current_scheme)
-        except Exception:
-            # Ignore errors if no theme is selected
-            pass
+    def apply_changes(self):
+        """Override to check if theme actually changed before restart check."""
+        # Check if theme actually changed before applying changes
+        current_scheme = self.current_scheme
+        saved_scheme = self.get_option('selected', default='')
+        theme_changed = (current_scheme != saved_scheme)
         
-        CONF.restore_notifications(section='appearance', option='selected')
+        # Remove 'selected' from changed_options if theme didn't actually change
+        # This prevents restart prompt when only font or other options changed
+        if not theme_changed:
+            self.changed_options.discard('selected')
+        
+        # Call parent's apply_changes which handles the restart check
+        super().apply_changes()
+    
+    def apply_settings(self):
+        # Check if theme actually changed by comparing current vs saved value
+        current_scheme = self.current_scheme
+        saved_scheme = self.get_option('selected', default='')
+        theme_changed = (current_scheme != saved_scheme)
+        
+        if theme_changed:
+            # Disable notifications to prevent immediate theme application
+            CONF.disable_notifications(section='appearance', option='selected')
+            self.set_option('selected', current_scheme)
+        
         self.update_combobox()
-        self.update_editor_preview()
-
-        # This applies font changes to all open editors immediately
-        # Fixes spyder-ide/spyder#22693
-        for plugin_name in PLUGIN_REGISTRY:
-            plugin = PLUGIN_REGISTRY.get_plugin(plugin_name)
-            plugin.update_font()
+        
+        # Only update preview and fonts if theme didn't change
+        # Theme changes require restart, so skip immediate updates
+        if not theme_changed:
+            self.update_editor_preview()
+            for plugin_name in PLUGIN_REGISTRY:
+                plugin = PLUGIN_REGISTRY.get_plugin(plugin_name)
+                plugin.update_font()
 
         return set(self.changed_options)
 

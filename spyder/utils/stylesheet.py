@@ -155,10 +155,39 @@ class AppStylesheet(SpyderStyleSheet, SpyderConfigurationAccessor):
 
     def set_stylesheet(self):
         """
-        This takes the stylesheet from QDarkstyle and applies our
+        This takes the stylesheet from the theme and applies our
         customizations to it.
         """
-        stylesheet = qdarkstyle.load_stylesheet(palette=SpyderPalette)
+        # Try to get the theme's stylesheet first
+        # If theme is not loaded yet, we need to load it via SpyderPalette
+        # but avoid calling qdarkstyle.load_stylesheet() which loads qdarkstyle resources
+        try:
+            from spyder.utils.theme_manager import theme_manager
+            theme_stylesheet = theme_manager.get_current_stylesheet()
+            if theme_stylesheet:
+                # Use theme's stylesheet directly - this avoids loading qdarkstyle resources
+                stylesheet = theme_stylesheet
+            else:
+                # Theme not loaded yet - access SpyderPalette to trigger theme loading
+                # This will load the theme and its stylesheet
+                _ = SpyderPalette  # Trigger theme loading
+                # Try again to get the theme's stylesheet
+                theme_stylesheet = theme_manager.get_current_stylesheet()
+                if theme_stylesheet:
+                    stylesheet = theme_stylesheet
+                else:
+                    # Still no theme stylesheet, fall back to qdarkstyle
+                    # But this should rarely happen if theme loading works
+                    stylesheet = qdarkstyle.load_stylesheet(palette=SpyderPalette)
+        except Exception:
+            # Fallback to qdarkstyle's default if theme loading fails
+            # This is a last resort and may cause segfault if Qt resources aren't ready
+            try:
+                stylesheet = qdarkstyle.load_stylesheet(palette=SpyderPalette)
+            except Exception:
+                # If even qdarkstyle fails, return empty stylesheet
+                stylesheet = ""
+        
         self._stylesheet = parse_stylesheet(stylesheet)
 
         # Add our customizations
