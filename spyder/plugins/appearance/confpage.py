@@ -408,18 +408,49 @@ class AppearanceConfigPage(PluginConfigPage):
 
     def apply_changes(self):
         """Override to check if theme actually changed before restart check."""
-        # Check if theme actually changed before applying changes
-        current_scheme = self.current_scheme
-        saved_scheme = self.get_option('selected', default='')
-        theme_changed = (current_scheme != saved_scheme)
-        
-        # Remove 'selected' from changed_options if theme didn't actually change
-        # This prevents restart prompt when only font or other options changed
-        if not theme_changed:
-            self.changed_options.discard('selected')
-        
-        # Call parent's apply_changes which handles the restart check
-        super().apply_changes()
+        if self.is_modified:
+            if self.pre_apply_callback is not None:
+                self.pre_apply_callback()
+
+            self.save_to_conf()
+
+            if self.apply_callback is not None:
+                self.apply_callback()
+
+            # Since the language cannot be retrieved by CONF and the language
+            # is needed before loading CONF, this is an extra method needed to
+            # ensure that when changes are applied, they are copied to a
+            # specific file storing the language value. This only applies to
+            # the main section config.
+            if self.CONF_SECTION == 'main':
+                self._save_lang()
+
+            # Check if theme actually changed by comparing current vs saved value
+            # Do this AFTER apply_settings() so we have the final state
+            current_scheme = self.current_scheme
+            saved_scheme = self.get_option('selected', default='')
+            theme_changed = (current_scheme != saved_scheme)
+            
+            # Remove 'selected' from changed_options if theme didn't actually change
+            # This prevents restart prompt when only font or other options changed
+            # Do this right before the restart check
+            if not theme_changed:
+                self.changed_options.discard('selected')
+
+            restart = False
+            for restart_option in self.restart_options:
+                if restart_option in self.changed_options:
+                    restart = self.prompt_restart_required()
+                    break  # Ensure a single popup is displayed
+
+            # Don't call set_modified() when restart() is called: The
+            # latter triggers closing of the application. Calling the former
+            # afterwards may result in an error because the underlying C++ Qt
+            # object of 'self' may be deleted at that point.
+            if restart:
+                self.restart()
+            else:
+                self.set_modified(False)
     
     def apply_settings(self):
         # Check if theme actually changed by comparing current vs saved value
