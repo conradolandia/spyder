@@ -409,6 +409,16 @@ class AppearanceConfigPage(PluginConfigPage):
     def apply_changes(self):
         """Override to check if theme actually changed before restart check."""
         if self.is_modified:
+            # Check if theme actually changed BEFORE saving/apply_settings
+            # This must be done before save_to_conf() or apply_settings() modifies the saved value
+            current_scheme = self.current_scheme
+            saved_scheme = self.get_option('selected', default='')
+            theme_changed = (current_scheme != saved_scheme)
+            
+            # Store theme_changed flag so apply_settings() can use it
+            # (since save_to_conf() will modify the saved value)
+            self._theme_changed_during_apply = theme_changed
+            
             if self.pre_apply_callback is not None:
                 self.pre_apply_callback()
 
@@ -425,12 +435,6 @@ class AppearanceConfigPage(PluginConfigPage):
             if self.CONF_SECTION == 'main':
                 self._save_lang()
 
-            # Check if theme actually changed by comparing current vs saved value
-            # Do this AFTER apply_settings() so we have the final state
-            current_scheme = self.current_scheme
-            saved_scheme = self.get_option('selected', default='')
-            theme_changed = (current_scheme != saved_scheme)
-            
             # Remove 'selected' from changed_options if theme didn't actually change
             # This prevents restart prompt when only font or other options changed
             # Do this right before the restart check
@@ -453,15 +457,22 @@ class AppearanceConfigPage(PluginConfigPage):
                 self.set_modified(False)
     
     def apply_settings(self):
-        # Check if theme actually changed by comparing current vs saved value
-        current_scheme = self.current_scheme
-        saved_scheme = self.get_option('selected', default='')
-        theme_changed = (current_scheme != saved_scheme)
+        # Use the theme_changed flag stored in apply_changes() if available
+        # Otherwise check if theme actually changed (fallback for direct calls)
+        if hasattr(self, '_theme_changed_during_apply'):
+            theme_changed = self._theme_changed_during_apply
+            # Clear the flag after using it
+            delattr(self, '_theme_changed_during_apply')
+        else:
+            # Fallback: check if theme actually changed by comparing current vs saved value
+            current_scheme = self.current_scheme
+            saved_scheme = self.get_option('selected', default='')
+            theme_changed = (current_scheme != saved_scheme)
         
         if theme_changed:
             # Disable notifications to prevent immediate theme application
             CONF.disable_notifications(section='appearance', option='selected')
-            self.set_option('selected', current_scheme)
+            # Note: save_to_conf() already saved the value, but we ensure notifications are disabled
         
         self.update_combobox()
         
