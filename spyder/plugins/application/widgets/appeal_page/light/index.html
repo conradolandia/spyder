@@ -13,11 +13,12 @@
     />
     <title>Donate today!</title>
     <link rel="icon" href="favicon.svg" />
-    <link rel="stylesheet" crossorigin href="./assets/appeal.css">
+    <link rel="stylesheet" crossorigin href="./appeal.css">
   </head>
-  <body class="grid items-center justify-center overflow-hidden">
+  <body class="grid items-center justify-center overflow-hidden hide-until-ready">
     <div
       class="info p-10 grid items-center justify-center max-w-screen-sm overflow-hidden"
+      id="info"
     >
       <div class="grid-center -mx-5">
         <img
@@ -62,14 +63,14 @@
     </div>
     <div
       class="changelog-wrapper"
-      id="changelog-wrapper"
+      id="changelog"
       data-changelog-url="./changelog.md"
     >
       <div
         class="flex flex-col items-center justify-center overflow-hidden w-full h-full"
       >
         <div
-          class="changelog-content flex-grow overflow-hidden overflow-y-auto p-20"
+          class="changelog-content prose flex-grow overflow-hidden overflow-y-auto p-20"
           id="changelog-content"
         >
           Loading changelog...
@@ -90,27 +91,30 @@
       </div>
     </div>
     <script>
-      const wrapper = document.getElementById("changelog-wrapper");
-      const container = document.getElementById("changelog-content");
+      const info = document.getElementById("info");
+      const changelog = document.getElementById("changelog");
+      const content = document.getElementById("changelog-content");
       let changelogLoaded = false;
       let showChangelog = ${show_changelog};
 
-      // load the changelog if it should be shown
+      // Set initial view before first paint to avoid appeal→changelog flicker
       if (showChangelog) {
-        document.addEventListener("DOMContentLoaded", () => {
-          loadChangelog(false);
-        });
+        info.classList.add("invisible");
+        content.innerHTML = "${changelog_html}";
+        changelog.classList.add("visible");
+        changelogLoaded = true;
       }
+      document.body.classList.remove("hide-until-ready");
 
       // load the changelog and animate the panel if desired
       async function loadChangelog(animate = true) { 
         if (changelogLoaded) return;
-        container.innerHTML = "${changelog_html}";
-        wrapper.classList.add("visible");
+        content.innerHTML = "${changelog_html}";
+        changelog.classList.add("visible");
 
         if (animate) {
-          wrapper.classList.remove("animateDown");
-          wrapper.classList.add("animateUp");
+          changelog.classList.remove("animateDown");
+          changelog.classList.add("animateUp");
         }
         changelogLoaded = true;
       }
@@ -118,10 +122,11 @@
       // close the changelog and show the in-app-appeal behind it
       function closeChangelog(animate = true) { 
         if (animate) {
-          wrapper.classList.remove("animateUp");
-          wrapper.classList.add("animateDown");
+          changelog.classList.remove("animateUp");
+          changelog.classList.add("animateDown");
         }
-        wrapper.classList.remove("visible");
+        changelog.classList.remove("visible");
+        info.classList.remove("invisible");
         changelogLoaded = false;
       }
 
