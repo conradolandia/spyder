@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -15,7 +15,9 @@
     <link rel="icon" href="favicon.svg" />
     <link rel="stylesheet" crossorigin href="./appeal.css">
   </head>
-  <body class="grid items-center justify-center overflow-hidden hide-until-ready">
+  <body
+    class="grid items-center justify-center overflow-hidden hide-until-ready"
+  >
     <div
       class="info p-10 grid items-center justify-center max-w-screen-sm overflow-hidden"
       id="info"
@@ -61,16 +63,12 @@
         >View Changelog</a
       >
     </div>
-    <div
-      class="changelog-wrapper"
-      id="changelog"
-      data-changelog-url="./changelog.md"
-    >
+    <div class="changelog-wrapper" id="changelog">
       <div
         class="flex flex-col items-center justify-center overflow-hidden w-full h-full"
       >
         <div
-          class="changelog-content prose flex-grow overflow-hidden overflow-y-auto p-20"
+          class="changelog-content prose flex-grow overflow-hidden overflow-y-auto p-20 pt-16"
           id="changelog-content"
         >
           Loading changelog...
@@ -107,7 +105,7 @@
       document.body.classList.remove("hide-until-ready");
 
       // load the changelog and animate the panel if desired
-      async function loadChangelog(animate = true) { 
+      async function loadChangelog(animate = true) {
         if (changelogLoaded) return;
         content.innerHTML = "${changelog_html}";
         changelog.classList.add("visible");
@@ -120,7 +118,7 @@
       }
 
       // close the changelog and show the in-app-appeal behind it
-      function closeChangelog(animate = true) { 
+      function closeChangelog(animate = true) {
         if (animate) {
           changelog.classList.remove("animateUp");
           changelog.classList.add("animateDown");

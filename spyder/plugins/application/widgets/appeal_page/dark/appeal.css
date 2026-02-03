@@ -1002,6 +1002,9 @@ video {
 .p-20 {
   padding: 5rem;
 }
+.pt-16 {
+  padding-top: 4rem;
+}
 .text-center {
   text-align: center;
 }
