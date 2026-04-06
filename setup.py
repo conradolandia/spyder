@@ -190,7 +190,7 @@ if os.name == 'nt':
 # =============================================================================
 EXTLIST = ['.pot', '.po', '.mo', '.svg', '.png', '.css', '.html', '.js',
            '.ini', '.txt', '.qss', '.ttf', '.json', '.rst', '.bloom',
-           '.ico', '.gif', '.mp3', '.ogg', '.sfd', '.bat', '.sh']
+           '.ico', '.gif', '.mp3', '.ogg', '.sfd', '.bat', '.sh', '.md']
 
 
 # =============================================================================
@@ -247,19 +247,19 @@ qt_requirements = {
     'pyqt5': [
         'pyqt5>=5.15,<5.16',
         'pyqtwebengine>=5.15,<5.16',
-        'qtconsole>=5.7.0,<5.8.0',
+        'qtconsole>=5.7.2,<5.8.0',
     ],
     'pyqt6': [
         'pyqt6>=6.5,<7',
         'pyqt6-webengine>=6.5,<7',
-        'qtconsole>=5.7.0,<5.8.0',
+        'qtconsole>=5.7.2,<5.8.0',
     ],
     'pyside6': [
         'pyside6>=6.5,<7',
-        'qtconsole>=5.7.0,<5.8.0',
+        'qtconsole>=5.7.2,<5.8.0',
     ],
     'conda-forge': [
-        'qtconsole>=5.7.0,<5.8.0',
+        'qtconsole>=5.7.2,<5.8.0',
     ]
 }
 
@@ -270,9 +270,8 @@ install_requires += [
     'aiohttp>=3.11.2',
     'applaunchservices>=0.3.0;platform_system=="Darwin"',
     'asyncssh>=2.14.0,<3.0.0',
-    'atomicwrites>=1.2.0',
     'bcrypt>=4.3.0',
-    'chardet>=2.0.0',
+    'chardet>=5.2.0,<8.0.0',
     'cloudpickle>=0.5.0',
     'cookiecutter>=1.6.0',
     'diff-match-patch>=20181111',
@@ -285,9 +284,10 @@ install_requires += [
     'ipython_pygments_lexers>=1.0',
     'jedi>=0.17.2,<0.20.0',
     'jellyfish>=0.7',
-    'lxml>=4.9.0',
     'jsonschema>=3.2.0',
     'keyring>=17.0.0',
+    'lxml>=4.9.0',
+    'markdown-it-py>=3.0.0',
     'nbconvert>=4.0',
     'numpydoc>=0.6.0',
     'packaging>=20.0',
@@ -297,18 +297,18 @@ install_requires += [
     'psutil>=5.3',
     'pygithub>=2.3.0',
     'pygments>=2.0',
-    'pylint>=3.1,<4',
+    'pylint>=3.1,<5',
     'pylint-venv>=3.0.2',
     'pyls-spyder>=0.4.0',
     'python-lsp-black>=2.0.0,<3.0.0',
     'python-lsp-ruff>=2.3.0,<3.0.0',
-    'python-lsp-server[all]>=1.13.0,<1.14.0',
+    'python-lsp-server[all]>=1.14.0,<1.15.0',
     'pyuca>=1.2',
     'pyxdg>=0.26;platform_system=="Linux"',
     'pyzmq>=24.0.0',
     'qdarkstyle>=3.2.0,<3.3.0',
     'qstylizer>=0.2.2',
-    'qtawesome>=1.4.0,<1.5.0',
+    'qtawesome>=1.4.1,<1.5.0',
     'qtpy>=2.4.0',
     'rtree>=0.9.7',
     'sphinx>=7.2.0',
@@ -332,7 +332,7 @@ if 'dev' in __version__:
                         if req.split(">")[0] not in reqs_to_loosen]
 
     install_requires.append('python-lsp-server[all]>=1.13.0,<1.15.0')
-    install_requires.append('qtconsole>=5.7.0,<5.9.0')
+    install_requires.append('qtconsole>=5.7.2,<5.9.0')
 
 extras_require = {
     'test': [

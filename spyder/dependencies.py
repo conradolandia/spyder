@@ -34,9 +34,8 @@ PLUGIN = 'spyder plugins'
 AIOHTTP_REQVER = '>=3.11.2'
 APPLAUNCHSERVICES_REQVER = '>=0.3.0'
 ASYNCSSH_REQVER = '>=2.14.0,<3.0.0'
-ATOMICWRITES_REQVER = '>=1.2.0'
 BCRYPT_REQVER = ">=4.3.0"
-CHARDET_REQVER = '>=2.0.0'
+CHARDET_REQVER = '>=5.2.0,<8.0.0'
 CLOUDPICKLE_REQVER = '>=0.5.0'
 COOKIECUTTER_REQVER = '>=1.6.0'
 DIFF_MATCH_PATCH_REQVER = '>=20181111'
@@ -49,6 +48,7 @@ JELLYFISH_REQVER = '>=0.7'
 JSONSCHEMA_REQVER = '>=3.2.0'
 KEYRING_REQVER = '>=17.0.0'
 LXML_REQVER = ">=4.9.0"
+MARKDOWN_IT_REQVER = ">=3.0.0"
 NBCONVERT_REQVER = '>=4.0'
 NUMPYDOC_REQVER = '>=0.6.0'
 PACKAGING_REQVER = '>=20.0'
@@ -58,9 +58,9 @@ PICKLESHARE_REQVER = '>=0.4'
 PSUTIL_REQVER = '>=5.3'
 PYGITHUB_REQVER = '>=2.3.0'
 PYGMENTS_REQVER = '>=2.0'
-PYLINT_REQVER = '>=3.1,<4'
+PYLINT_REQVER = '>=3.1,<5'
 PYLINT_VENV_REQVER = '>=3.0.2'
-PYLSP_REQVER = '>=1.13.0,<1.14.0'
+PYLSP_REQVER = '>=1.14.0,<1.15.0'
 PYLSP_BLACK_REQVER = '>=2.0.0,<3.0.0'
 PYLSP_RUFF_REQVER = '>=2.3.0,<3.0.0'
 PYLS_SPYDER_REQVER = '>=0.4.0'
@@ -69,8 +69,8 @@ PYXDG_REQVER = '>=0.26'
 PYZMQ_REQVER = '>=24.0.0'
 QDARKSTYLE_REQVER = '>=3.2.0,<3.3.0'
 QSTYLIZER_REQVER = '>=0.2.2'
-QTAWESOME_REQVER = '>=1.4.0,<1.5.0'
-QTCONSOLE_REQVER = '>=5.7.0,<5.8.0'
+QTAWESOME_REQVER = '>=1.4.1,<1.5.0'
+QTCONSOLE_REQVER = '>=5.7.2,<5.8.0'
 QTPY_REQVER = '>=2.4.0'
 RTREE_REQVER = '>=0.9.7'
 SPHINX_REQVER = '>=7.2.0'
@@ -111,10 +111,6 @@ DESCRIPTIONS = [
      'package_name': 'asyncssh',
      'features': _('Connect to remote kernels through SSH'),
      'required_version': ASYNCSSH_REQVER},
-    {'modname': "atomicwrites",
-     'package_name': "atomicwrites",
-     'features': _("Atomic file writes in the Editor"),
-     'required_version': ATOMICWRITES_REQVER},
     {'modname': "bcrypt",
      'package_name': "bcrypt",
      'features': _("Decrypt passphrase of SSH key files"),
@@ -172,6 +168,10 @@ DESCRIPTIONS = [
      'package_name': "lxml",
      'features': _("Colorize SVG icons according to the interface theme"),
      'required_version': LXML_REQVER},
+    {'modname': "markdown_it",
+     'package_name': "markdown-it-py",
+     'features': _("Render markdown content to HTML"),
+     'required_version': MARKDOWN_IT_REQVER},
     {'modname': "nbconvert",
      'package_name': "nbconvert",
      'features': _("Manipulate Jupyter notebooks in the Editor"),

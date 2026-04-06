@@ -58,6 +58,14 @@ def _get_user_env_script():
             f"""\
             #!{shell} -i
             unset HISTFILE
+
+            # PackageKit's `command-not-found` package can cause recursion, so
+            # unset it here.
+            # Fixes spyder-ide/spyder#24716
+            if type command_not_found_handle >/dev/null 2>&1; then
+                unset -f command_not_found_handle
+            fi
+
             {shell} -l -c "'{sys.executable}' -c 'import os; print(dict(os.environ))'"
             """
         )
@@ -130,7 +138,10 @@ async def get_user_environment_variables() -> dict:
                 if stderr:
                     logger.info(stderr.decode().strip())
                 if stdout:
-                    env_var = eval(stdout.decode(), None)
+                    # Environment variables is final print statement
+                    # Fixes spyder-ide/spyder#25263
+                    env_var_str = stdout.decode().strip().split("\n")[-1]
+                    env_var = eval(env_var_str, None)
             except Exception as exc:
                 logger.info(exc)
         else:

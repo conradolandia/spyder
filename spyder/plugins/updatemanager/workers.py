@@ -30,10 +30,14 @@ from spyder_kernels.utils.pythonenv import is_conda_env
 # Local imports
 from spyder import __version__
 from spyder.api.translations import _
-from spyder.config.base import is_conda_based_app, running_in_ci
+from spyder.config.base import (
+    is_conda_based_app,
+    is_installed_all_users,
+    running_in_ci,
+)
 from spyder.plugins.updatemanager.utils import get_updater_info
 from spyder.utils.conda import get_spyder_conda_channel, find_conda
-from spyder.utils.programs import get_temp_dir
+from spyder.utils.programs import get_temp_dir, find_program
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -41,19 +45,19 @@ logger = logging.getLogger(__name__)
 CURRENT_VERSION = parse(__version__)
 
 CONNECT_ERROR_MSG = _(
-    'Unable to connect to the Spyder update service.'
-    '<br><br>Make sure your connection is working properly.'
+    "Unable to connect to the Spyder update service."
+    "<br><br>Make sure your connection is working properly."
 )
 
 HTTP_ERROR_MSG = _(
-    'HTTP error {status_code} when checking for updates.'
-    '<br><br>Make sure your connection is working properly,'
-    'and try again later.'
+    "HTTP error {status_code} when checking for updates."
+    "<br><br>Make sure your connection is working properly,"
+    "and try again later."
 )
 
 SSL_ERROR_MSG = _(
-    'SSL certificate verification failed while checking for Spyder updates.'
-    '<br><br>Please contact your network administrator for assistance.'
+    "SSL certificate verification failed while checking for Spyder updates."
+    "<br><br>Please contact your network administrator for assistance."
 )
 
 OS_ERROR_MSG = _(
@@ -64,7 +68,7 @@ OS_ERROR_MSG = _(
 )
 
 GH_HEADERS = {"Accept": "application/vnd.github+json"}
-_token = os.getenv('GITHUB_TOKEN')
+_token = os.getenv("GITHUB_TOKEN")
 if running_in_ci() and _token:
     GH_HEADERS.update(Authorization=f"Bearer {_token}")
 
@@ -97,8 +101,7 @@ class AssetInfo(TypedDict):
 
 
 def get_github_releases(
-    tags: str | tuple[str] | None = None,
-    updater: bool = False
+    tags: str | tuple[str] | None = None, updater: bool = False
 ) -> dict[Version, dict]:
     """
     Get Github release information
@@ -144,7 +147,7 @@ def get_github_releases(
                 page.raise_for_status()
                 data.append(page.json())
 
-    return {parse(item['tag_name']): item for item in data}
+    return {parse(item["tag_name"]): item for item in data}
 
 
 def get_asset_info(
@@ -172,7 +175,9 @@ def get_asset_info(
 
     if current_version.major < release.major or not is_conda_based_app():
         update_type = UpdateType.Major
-    elif current_version.minor < release.minor or current_version.is_prerelease:
+    elif (
+        current_version.minor < release.minor or current_version.is_prerelease
+    ):
         update_type = UpdateType.Minor
     else:
         update_type = UpdateType.Micro
@@ -183,11 +188,11 @@ def get_asset_info(
         filename = "spyder-conda-lock.zip"
     else:
         machine = platform.machine().lower().replace("amd64", "x86_64")
-        if os.name == 'nt':
+        if os.name == "nt":
             filename = f"Spyder-Windows-{machine}.exe"
-        if sys.platform == 'darwin':
+        if sys.platform == "darwin":
             filename = f"Spyder-macOS-{machine}.pkg"
-        if sys.platform.startswith('linux'):
+        if sys.platform.startswith("linux"):
             filename = f"Spyder-Linux-{machine}.sh"
 
     asset_info = None
@@ -208,7 +213,7 @@ def get_asset_info(
 def _check_asset_available(
     releases: dict[Version, dict],
     current_version: Version,
-    updater: bool = False
+    updater: bool = False,
 ) -> AssetInfo | None:
     latest_release = max(releases) if releases else current_version
     update_available = current_version < latest_release
@@ -269,8 +274,8 @@ def validate_download(file: str, checksum: str) -> bool:
     logger.debug(f"Valid {file}: {valid}")
 
     # Extract validated zip files
-    if valid and file.endswith('.zip'):
-        with ZipFile(file, 'r') as f:
+    if valid and file.endswith(".zip"):
+        with ZipFile(file, "r") as f:
             f.extractall(osp.dirname(file))
         logger.debug(f"{file} extracted.")
 
@@ -279,11 +284,19 @@ def validate_download(file: str, checksum: str) -> bool:
 
 class UpdateDownloadCancelledException(Exception):
     """Download for installer to update was cancelled."""
+
     pass
 
 
 class UpdateDownloadError(Exception):
     """Error occured while downloading file"""
+
+    pass
+
+
+class UpdateUpdaterUACCancelled(Exception):
+    """UAC elevation was cancelled"""
+
     pass
 
 
@@ -382,8 +395,8 @@ class WorkerUpdate(BaseWorker):
 
             if self.channel == "pypi":
                 url = "https://pypi.python.org/pypi/spyder/json"
-            else:
-                url += '/channeldata.json'
+            elif url is not None:
+                url += "/channeldata.json"
 
         try:
             release = None
@@ -398,17 +411,28 @@ class WorkerUpdate(BaseWorker):
 
                 if self.channel == "pypi":
                     releases = [
-                        parse(k) for k in data["releases"].keys()
+                        parse(k)
+                        for k in data["releases"].keys()
                         if not parse(k).is_prerelease
                     ]
                     release = max(releases)
                 else:
                     # Conda pkgs/main or conda-forge url
-                    spyder_data = data['packages'].get('spyder')
+                    spyder_data = data["packages"].get("spyder")
                     if spyder_data:
                         release = parse(spyder_data["version"])
 
-            self._check_update_available(release)
+            if (
+                # Always check for updates for our installers or pip
+                # installations
+                is_conda_based_app()
+                or self.channel == "pypi"
+                # Only offer updates for conda envs if we're able to detect the
+                # channel. That's because Anaconda is always several versions
+                # behind the latest one.
+                or is_conda_env(sys.prefix) and url is not None
+            ):
+                self._check_update_available(release)
 
         except SSLError as err:
             self.error = SSL_ERROR_MSG
@@ -495,11 +519,8 @@ class WorkerUpdateUpdater(BaseWorker):
             self.asset_info["filename"],
         )
 
-        if (
-            osp.exists(self.installer_path)
-            and validate_download(
-                self.installer_path, self.asset_info["checksum"]
-            )
+        if osp.exists(self.installer_path) and validate_download(
+            self.installer_path, self.asset_info["checksum"]
         ):
             logger.debug(f"{self.installer_path} already downloaded.")
             return
@@ -513,53 +534,110 @@ class WorkerUpdateUpdater(BaseWorker):
 
         page = requests.get(url, headers=GH_HEADERS)
         page.raise_for_status()
-        with open(self.installer_path, 'wb') as f:
+        with open(self.installer_path, "wb") as f:
             f.write(page.content)
 
         if validate_download(self.installer_path, self.asset_info["checksum"]):
-            logger.info('Download successfully completed.')
+            logger.info("Download successfully completed.")
         else:
             raise UpdateDownloadError("Download failed!")
 
     def _install_update(self):
-        """Install or update Spyder-updater environment."""
-        dirname = osp.dirname(self.installer_path)
+        """
+        Create or update Spyder-updater environment.
 
+        In the case where Spyder is installed for all users on Windows,
+        User Account Control (UAC) needs to be elevated in order to update
+        Spyder-updater. This requires that the subprocess run through
+        PowerShell with the `-Verb RunAs` flag. However, this flag is
+        incompatible with capturing std[out|err], either with a subprocess.PIPE
+        or with `-RedirectStandard[Output|Error]`. Thus, the only solution is
+        to run a separate script that internally redirects std[out|err] to
+        (temporary) log files for later inspection.
+
+        Unix systems do not require a separate script, but it is used to
+        retain simplicity and parity between the platforms.
+
+        Note that ctypes.windll.shell32.ShellExecuteEx is inadequate since it
+        does not wait for the process to complete before returning.
+        """
+        updater_script = osp.join(
+            osp.dirname(__file__),
+            "scripts",
+            "updater.bat" if os.name == "nt" else "updater.sh",
+        )
+        conda_exe = find_conda()
+        conda_cmd = "create"
+        if self.updater_version > parse("0.0.0"):
+            conda_cmd = "update"
+        env_path = osp.join(osp.dirname(sys.prefix), "spyder-updater")
+
+        installer_dir = osp.dirname(self.installer_path)
         if os.name == "nt":
             plat = "win-64"
         elif sys.platform == "darwin":
             plat = "osx-arm64" if platform.machine() == "arm64" else "osx-64"
         else:
             plat = "linux-64"
-        spy_updater_lock = osp.join(dirname, f"conda-updater-{plat}.lock")
-        spy_updater_conda = glob(osp.join(dirname, "spyder-updater*.conda"))[0]
-
-        conda_exe = find_conda()
-        conda_cmd = "create"
-        if self.updater_version > parse("0.0.0"):
-            conda_cmd = "update"
-        env_path = osp.join(osp.dirname(sys.prefix), "spyder-updater")
-        cmd = [
-            # Update spyder-updater environment
-            conda_exe,
-            conda_cmd, "--yes",
-            "--prefix", env_path,
-            "--file", spy_updater_lock,
-            "&&",
-            # Update spyder-updater
-            conda_exe,
-            "install", "--yes",
-            "--prefix", env_path,
-            "--no-deps",
-            "--force-reinstall",
-            spy_updater_conda
-        ]
-
-        logger.debug(f"""Conda command for the updater: '{" ".join(cmd)}'""")
-        proc = subprocess.run(
-            " ".join(cmd), shell=True, capture_output=True, text=True
+        spy_updater_lock = osp.join(
+            installer_dir, f"conda-updater-{plat}.lock"
         )
-        proc.check_returncode()
+        spy_updater_conda = glob(
+            osp.join(installer_dir, "spyder-updater*.conda")
+        )[0]
+
+        # Run updater script
+        kwargs = dict(shell=True, capture_output=True, text=True)
+        cmd = [
+            updater_script,
+            conda_exe,
+            conda_cmd,
+            env_path,
+            spy_updater_lock,
+            spy_updater_conda,
+        ]
+        if os.name == "nt":
+            kwargs.update(executable=find_program("powershell"))
+            cmd = [
+                "start",
+                "-FilePath",
+                f'"{updater_script}"',
+                "-ArgumentList",
+                ",".join([f"'{a}'" for a in cmd[1:]]),
+                "-Wait",
+                "-WindowStyle",
+                "Hidden",
+            ]
+            if is_installed_all_users():
+                cmd.extend(["-Verb", "RunAs"])
+
+        logger.info("Updating Spyder Updater...")
+        proc = subprocess.run(" ".join(cmd), **kwargs)
+
+        # Check for errors
+        if os.name == "nt":
+            # Stdout/err is only captured for the high-level subprocess.
+            # If there is an error here, it will only be if the user
+            # cancelled the UAC elevation
+            try:
+                proc.check_returncode()
+            except subprocess.CalledProcessError as err:
+                raise UpdateUpdaterUACCancelled(err.stderr)
+
+            # Stdout/err is not captured by subprocess for the updater_script
+            # Check for errors there by reading the logs
+            updater_stdout = osp.join(installer_dir, "updater_stdout.log")
+            updater_stderr = osp.join(installer_dir, "updater_stderr.log")
+            with open(updater_stderr, "r") as f:
+                stderr = f.read()
+            with open(updater_stdout, "r") as f:
+                stdout = f.read()
+            if stderr:
+                raise subprocess.CalledProcessError(
+                    1, " ".join(cmd), output=stdout, stderr=stderr
+                )
+        else:
+            proc.check_returncode()
 
     def start(self):
         """Main method of the worker."""
@@ -577,6 +655,12 @@ class WorkerUpdateUpdater(BaseWorker):
             elif self.asset_info is not None:
                 self._download_asset()
                 self._install_update()
+        except UpdateUpdaterUACCancelled as err:
+            self.error = err
+            logger.debug(err)
+        except subprocess.CalledProcessError as err:
+            self.error = err
+            logger.debug(err)
         except Exception as err:
             # Send untracked errors to our error reporter
             self.error = str(err)
@@ -640,8 +724,8 @@ class WorkerDownloadInstaller(BaseWorker):
         logger.info(f"Downloading {url} to {self.installer_path}")
 
         self._clean_installer_dir()
-        dirname = osp.dirname(self.installer_path)
-        os.makedirs(dirname, exist_ok=True)
+        installer_dir = osp.dirname(self.installer_path)
+        os.makedirs(installer_dir, exist_ok=True)
 
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
@@ -649,7 +733,7 @@ class WorkerDownloadInstaller(BaseWorker):
             size = int(r.headers["content-length"])
             self._progress_reporter(0, size)
 
-            with open(self.installer_path, 'wb') as f:
+            with open(self.installer_path, "wb") as f:
                 chunk_size = 8 * 1024
                 size_read = 0
                 for chunk in r.iter_content(chunk_size=chunk_size):
@@ -658,7 +742,7 @@ class WorkerDownloadInstaller(BaseWorker):
                     self._progress_reporter(size_read, size)
 
         if validate_download(self.installer_path, self.asset_info["checksum"]):
-            logger.info('Download successfully completed.')
+            logger.info("Download successfully completed.")
         else:
             raise UpdateDownloadError("Download failed!")
 
@@ -686,16 +770,15 @@ class WorkerDownloadInstaller(BaseWorker):
             logger.warning(err, exc_info=err)
         except Exception as err:
             error = traceback.format_exc()
-            formatted_error = (
-                error.replace('\n', '<br>')
-                .replace(' ', '&nbsp;')
+            formatted_error = error.replace("\n", "<br>").replace(
+                " ", "&nbsp;"
             )
 
             self.error = _(
-                'It was not possible to download the installer due to the '
-                'following error:'
-                '<br><br>'
-                '<tt>{}</tt>'
+                "It was not possible to download the installer due to the "
+                "following error:"
+                "<br><br>"
+                "<tt>{}</tt>"
             ).format(formatted_error)
             logger.warning(err, exc_info=err)
             self._clean_installer_dir()

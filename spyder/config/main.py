@@ -240,6 +240,7 @@ DEFAULTS = [
              {
               'mute_inline_plotting': True,
               'show_plot_outline': False,
+              'max_plots': 50,
              }),
             ('editor',
              {
@@ -397,7 +398,8 @@ DEFAULTS = [
                'completions_wait_for_ms': 200,
                'enabled_providers': {},
                'provider_configuration': {},
-               'request_priorities': {}
+               'request_priorities': {},
+               'use_enter_for_completions': True
              }),
             ('profiler',
              {
@@ -553,7 +555,7 @@ DEFAULTS = [
               'editor/split vertically': "Ctrl+{",
               'editor/split horizontally': "Ctrl+_",
               'editor/close split panel': "Alt+Shift+W",
-              'editor/docstring': "Ctrl+Alt+D",
+              'editor/docstring': "Ctrl+Alt+Shift+D",
               'editor/autoformatting': "Ctrl+Alt+I",
               'editor/show in external file explorer': '',
               'editor/enter array inline': "Ctrl+Alt+M",
@@ -562,7 +564,6 @@ DEFAULTS = [
               'editor/run selection in debugger': CTRL + '+F9',
               'editor/add cursor up': 'Alt+Shift+Up',
               'editor/add cursor down': 'Alt+Shift+Down',
-              'editor/clear extra cursors': 'Esc',
               # -- Internal console --
               'internal_console/inspect current object': "Ctrl+I",
               'internal_console/clear shell': "Ctrl+L",
@@ -734,4 +735,4 @@ NAME_MAP = {
 #    or if you want to *rename* options, then you need to do a MAJOR update in
 #    version, e.g. from 3.0.0 to 4.0.0
 # 3. You don't need to touch this value if you're just adding a new option
-CONF_VERSION = '87.5.0'
+CONF_VERSION = '88.0.0'

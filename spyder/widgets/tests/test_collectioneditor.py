@@ -30,9 +30,15 @@ from qtpy.QtWidgets import QDateEdit, QLineEdit, QMessageBox, QWidget
 # Local imports
 from spyder.config.manager import CONF
 from spyder.widgets.collectionseditor import (
-    CollectionsEditor, CollectionsEditorTableView, CollectionsEditorWidget,
-    CollectionsModel, LARGE_NROWS, natsort, RemoteCollectionsEditorTableView,
-    ROWS_TO_LOAD)
+    CollectionsEditor,
+    CollectionsEditorTableView,
+    CollectionsEditorWidget,
+    CollectionsModel,
+    LARGE_NROWS,
+    natsort,
+    RemoteCollectionsEditorTableView,
+    ROWS_TO_LOAD,
+)
 from spyder.plugins.variableexplorer.widgets.collectionsdelegate import (
     SELECT_ROW_BUTTON_SIZE
 )
@@ -451,6 +457,10 @@ def test_sort_float_collectionsmodel():
                                       '0.1', '1.0', '10.0', '1e+16']]
 
 
+@pytest.mark.skipif(
+    parse(pandas.__version__) < parse("3.0.0"),
+    reason="Fails with versions older than Pandas 3.0"
+)
 def test_sort_collectionsmodel():
     var_list1 = [0, 1, 2]
     var_list2 = [3, 4, 5, 6]
@@ -487,8 +497,8 @@ def test_sort_collectionsmodel():
         ['(3, 3)', '(2, 3)', '(3,)', '(4,)', 1, 3, 4],
         ['Column names: 0, 1, 2',
          'Column names: 0, 1, 2',
-         'Series object of pandas.core.series module',
-         'Series object of pandas.core.series module',
+         'Series object of pandas module',
+         'Series object of pandas module',
          '1',
          '[0, 1, 2]',
          '[3, 4, 5, 6]']]
@@ -500,8 +510,8 @@ def test_sort_collectionsmodel():
         ['(2, 3)', '(3,)', '(3, 3)', '(4,)', 1, 3, 4],
         ['Column names: 0, 1, 2',
          'Column names: 0, 1, 2',
-         'Series object of pandas.core.series module',
-         'Series object of pandas.core.series module',
+         'Series object of pandas module',
+         'Series object of pandas module',
          '1',
          '[0, 1, 2]',
          '[3, 4, 5, 6]']] or data_table(cm, 7, 4) == [
@@ -513,9 +523,9 @@ def test_sort_collectionsmodel():
          '[0, 1, 2]',
          '[3, 4, 5, 6]',
          'Column names: 0, 1, 2',
-         'Series object of pandas.core.series module',
+         'Series object of pandas module',
          'Column names: 0, 1, 2',
-         'Series object of pandas.core.series module',
+         'Series object of pandas module',
          ]]
 
 
@@ -1262,6 +1272,18 @@ def test_collectionseditor_select_row_button(qtbot):
     # Click again and check the row was deselected
     qtbot.mouseClick(table_view.viewport(), Qt.MiddleButton, pos=QPoint(x, y))
     assert table_view.selected_rows() == set()
+
+
+def test_collectionseditorwidget_close_action(mocker, qtbot):
+    """Test CollectionsEditorWidget.close_action is working as expected"""
+    mocker.patch.object(CollectionsEditor, "reject")
+
+    li = [1, 2]
+    editor = CollectionsEditor()
+    editor.setup(li)
+
+    editor.widget.close_action.trigger()
+    assert CollectionsEditor.reject.call_count == 1
 
 
 if __name__ == "__main__":

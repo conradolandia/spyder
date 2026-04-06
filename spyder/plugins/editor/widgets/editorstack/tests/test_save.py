@@ -23,16 +23,14 @@ from qtpy.QtCore import Qt
 # Local imports
 from spyder.api.plugins import Plugins
 from spyder.config.base import running_in_ci
-from spyder.plugins.debugger.panels.debuggerpanel import DebuggerPanel
+from spyder.plugins.completion.providers.languageserver.providers.utils import (
+    path_as_uri,
+)
 from spyder.plugins.editor.widgets.editorstack import editorstack as editor
 from spyder.plugins.editor.widgets.editorstack import EditorStack
 from spyder.plugins.editor.widgets.splitter import EditorSplitter
 from spyder.plugins.editor.widgets.window import EditorMainWidgetExample
-
-from spyder.plugins.completion.providers.languageserver.providers.utils import (
-    path_as_uri)
 from spyder.plugins.outlineexplorer.main_widget import OutlineExplorerWidget
-from spyder.plugins.debugger.utils.breakpointsmanager import BreakpointsManager
 
 
 # ---- Helpers
@@ -458,7 +456,6 @@ def test_save_as_change_file_type(editor_bot, mocker, tmpdir):
     editorstack.tabs.setCurrentIndex(1)
     assert editorstack.get_current_filename() == 'secondtab.py'
     editor = editorstack.get_current_editor()
-    editor.breakpoints_manager = BreakpointsManager(editor)
     mocker.patch.object(editor, 'notify_close')
     editorstack.sig_open_file = Mock()
 
@@ -481,10 +478,6 @@ def test_save_as_change_file_type(editor_bot, mocker, tmpdir):
     # Assert we sent notify_close and emitted sig_open_file
     assert editor.notify_close.call_count == 1
     assert editorstack.sig_open_file.emit.called == 1
-
-    # Test the debugger panel is hidden
-    debugger_panel = editor.panels.get(DebuggerPanel)
-    assert not debugger_panel.isVisible()
 
 
 @pytest.mark.order(1)
@@ -683,6 +676,28 @@ def test_save_as_lsp_calls(completions_editor, mocker, qtbot, tmpdir):
 
     # There must be 7 symbols (2 functions and 5 variables)
     assert len(code_editor.process_symbols.call_args.args[0]['params']) == 7
+
+
+def test_save_with_inline_completions(editor_bot, mocker, tmp_path):
+    """
+    Test that inline completions are rejected before saving with they have been
+    introduced but not accepted yet.
+    """
+    editorstack, __ = editor_bot
+    editorstack.tabs.setCurrentIndex(0)
+    codeeditor = editorstack.get_current_editor()
+
+    mocker.patch.object(editor, 'getsavefilename')
+    editor.getsavefilename.return_value = (tmp_path / 'foo.py', '')
+
+    # Enter inline completion
+    code = "def bar(z):\n    return z"
+    codeeditor.do_inline_completions(code)
+    assert editorstack.save(index=0)
+
+    # Check completion was rejected
+    for text in ["bar", "return", "z"]:
+        assert text not in codeeditor.get_text_with_eol()
 
 
 if __name__ == "__main__":

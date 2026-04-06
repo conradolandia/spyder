@@ -275,7 +275,7 @@ class CollectionsDelegate(QItemDelegate, SpyderFontsMixin):
                 source_index = index
 
             type_of_value = source_index.model().row_type(source_index.row())
-            if type_of_value == 'Polars DataFrame':
+            if type_of_value in ['Polars DataFrame', 'Polars Series']:
                 readonly = True
 
             # We need to leave this import here for tests to pass.
@@ -490,6 +490,21 @@ class CollectionsDelegate(QItemDelegate, SpyderFontsMixin):
             self.sig_free_memory_requested.emit()
         except RuntimeError:
             pass
+
+    def close_all_editors(self):
+        """Close all opened non-modal editor dialogs."""
+        for editor_id, data in list(self._editors.items()):
+            editor = data.get('editor')
+            if editor is None:
+                self._editors.pop(editor_id, None)
+                continue
+
+            try:
+                editor.reject()
+            except RuntimeError:
+                pass
+            finally:
+                self._editors.pop(editor_id, None)
 
     def commitAndCloseEditor(self):
         """Overriding method commitAndCloseEditor"""

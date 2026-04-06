@@ -470,6 +470,12 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
             triggered=lambda checked: self.restart_kernel(),
             register_shortcut=True
         )
+        self.reconnect_action = self.create_action(
+            IPythonConsoleWidgetActions.Reconnect,
+            text=_("Reconnect to remote kernel"),
+            icon=self.create_icon('reconnect'),
+            triggered=self.reconnect_kernel,
+        )
         self.reset_action = self.create_action(
             IPythonConsoleWidgetActions.ResetNamespace,
             text=_("Remove all variables"),
@@ -685,6 +691,7 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
         for item in [
                 self.interrupt_action,
                 self.restart_action,
+                self.reconnect_action,
                 self.reset_action,
                 self.rename_tab_action]:
             self.add_item_to_menu(
@@ -757,10 +764,18 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
         self.time_label.name = (
             IPythonConsoleWidgetCornerWidgets.TimeElapsedLabel
         )
+        self.reconnect_button = self.create_toolbutton(
+            IPythonConsoleWidgetCornerWidgets.ReconnectButton,
+            text=_("Reconnect to remote kernel"),
+            tip=_("Reconnect to remote kernel"),
+            icon=self.create_icon("reconnect"),
+            triggered=self.reconnect_kernel,
+        )
 
         # --- Add tab corner widgets.
         self.add_corner_widget(self.stop_button)
         self.add_corner_widget(self.clear_button)
+        self.add_corner_widget(self.reconnect_button)
         self.add_corner_widget(self.time_label)
 
         # --- Tabs context menu
@@ -781,6 +796,7 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
         for item in [
                 self.interrupt_action,
                 self.restart_action,
+                self.reconnect_action,
                 self.reset_action,
                 self.rename_tab_action]:
             self.add_item_to_menu(
@@ -828,6 +844,13 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
             executing = client.is_client_executing()
             self.interrupt_action.setEnabled(executing)
             self.stop_button.setEnabled(executing)
+
+            # For remote clients
+            is_remote = client.is_remote()
+            self.reconnect_action.setVisible(is_remote)
+            self.reconnect_button.setMaximumWidth(
+                self.stop_button.width() if is_remote else 0
+            )
 
             # Client is loading or showing a kernel error
             if (
@@ -1965,8 +1988,11 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
 
         # Add client to widget
         self.add_tab(
-            client, name=client.get_name(), filename=filename,
-            give_focus=give_focus)
+            client,
+            name=client.get_name(),
+            filename=filename,
+            give_focus=give_focus,
+        )
 
         return client
 
@@ -2280,11 +2306,34 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
                 client.is_remote()
                 and client.jupyter_api.server_id == server_id
             ):
+                # Since the server is being stopped, we can safely close the
+                # client's remote APIs (e.g. Jupyter and files). That will
+                # prevent sending additional requests to the server (e.g. to
+                # shutdown the kernel), which at some point it won't be able to
+                # process.
+                client.close_remote_apis()
+
                 is_last_client = (
                     len(self.get_related_clients(client, open_clients)) == 0
                 )
                 client.close_client(is_last_client)
                 open_clients.remove(client)
+
+        # Set clients list with those that are left open
+        self.clients = open_clients
+
+        # Create a new client if the console is about to become empty
+        if not self.tabwidget.count() and self.create_new_client_if_empty:
+            self.create_new_client()
+
+    def reconnect_remote_clients(self, server_id):
+        """Request reconnection for all clients bound to a remote server."""
+        for client in self.clients:
+            if (
+                client.is_remote()
+                and client.jupyter_api.server_id == server_id
+            ):
+                client.reconnect_remote_kernel()
 
     def get_client_index_from_id(self, client_id):
         """Return client index from id"""
@@ -2547,6 +2596,15 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
             self.sig_switch_to_plugin_requested.emit()
             client.stop_button_click_handler()
 
+    def reconnect_kernel(self):
+        """Reconnect remote kernel of current client."""
+        client = self.get_current_client()
+        if client is None or not client.is_remote():
+            return
+
+        self.sig_switch_to_plugin_requested.emit()
+        client.reconnect_remote_kernel()
+
     # ---- For cells
     def run_cell(self, code, cell_name, filename, method='runcell'):
         """Run cell in current or dedicated client."""
@@ -2636,7 +2694,23 @@ class IPythonConsoleWidget(PluginMainWidget, CachedKernelMixin):  # noqa: PLR090
             return
 
         def _run():
-            # Freeze parameters for use in signal connect
+            """
+            Call _run_script with the requested parameters.
+
+            Notes
+            -----
+            This function is necessary to freeze the parameters used in the
+            call when it's connected as a slot to sig_prompt_ready (see below).
+            """
+            # Disconnect from sig_prompt_ready to avoid calling the function
+            # over and over if users execute a file and the kernel is not yet
+            # ready.
+            # Fixes spyder-ide/spyder#25301
+            try:
+                client.shellwidget.sig_prompt_ready.disconnect(_run)
+            except TypeError:
+                pass
+
             self._run_script(
                 filename,
                 wdir,
