@@ -29,6 +29,7 @@ from qtpy.QtWidgets import QApplication
 # Local imports
 from spyder.api.translations import _
 from spyder.config.manager import CONF
+from spyder.config.user import NoDefault
 from spyder.plugins.editor.utils.languages import CELL_LANGUAGES
 from spyder.plugins.editor.utils.editor import TextBlockHelper as tbh
 from spyder.plugins.editor.utils.editor import BlockUserData
@@ -93,23 +94,10 @@ COLOR_SCHEME_DEFAULT_VALUES = {
     "magic":      ("#c670e0", False, False),
 }
 
-# Get theme names from config, with empty list as default for fresh installs
-# This will be populated when themes are exported to config
-def _get_color_scheme_names():
-    """Get color scheme names from config, with fallback for fresh installs."""
-    try:
-        names = CONF.get('appearance', 'names', default=[])
-        if not names:
-            # If no names in config yet, return default theme variant
-            # This happens on first run before themes are exported
-            return ['spyder_themes.spyder/dark']
-        return names
-    except Exception:
-        # If config isn't ready, return default
-        return ['spyder_themes.spyder/dark']
-
-# Lazy access to color scheme names to handle first-run case
-COLOR_SCHEME_NAMES = _get_color_scheme_names()
+# Legacy syntax scheme ids (no ``theme/mode`` variant) seeded into config at
+# import time by ``spyder.config.gui``. Theme variants from packages are not
+# listed here; they are discovered via ThemeManager.get_available_theme_variants().
+COLOR_SCHEME_NAMES = ()
 
 # Mapping for file extensions that use Pygments highlighting but should use
 # different lexers than Pygments' autodetection suggests.  Keys are file
@@ -147,119 +135,96 @@ def get_span(match, key=None):
     return start16, end16
 
 
+def _appearance_syntax_override(variant_prefixes, key):
+    """Return a user-stored syntax value for ``key`` if present, else None."""
+    for prefix in variant_prefixes:
+        if not prefix or "/" not in prefix:
+            continue
+        try:
+            return CONF.get(
+                "appearance", f"{prefix}/{key}", default=NoDefault
+            )
+        except Exception:
+            continue
+    return None
+
+
 def get_color_scheme(name):
     """
-    Get a color scheme from config using its name.
-    
-    If name is not found or is a legacy name like 'Spyder', 
-    returns the currently selected theme's colors from config.
+    Resolve syntax colors for a scheme id.
+
+    Theme variants (``package.theme/mode``) use the installed theme palette as
+    the base and apply per-key overrides from the ``appearance`` section when
+    those options exist (user edits in Preferences).
     """
-    # Handle legacy 'Spyder' default by using current selected theme
-    if name and name.lower() == 'spyder':
-        name = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
-    
-    # Get the original name before normalization to preserve casing for config keys
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if name and name.lower() == "spyder":
+        name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+
     original_name = name
     if not original_name:
-        # No name provided, use currently selected theme
-        original_name = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
-    
-    # Debug: log what we're getting colors for
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.debug(f"get_color_scheme called with name={name}, original_name={original_name}")
-    
-    # Normalize name for comparison (but use original_name for config keys)
-    if name:
-        name = name.lower()
-    else:
-        name = original_name.lower()
-    
-    # Check if this is a new theme variant (contains '/')
-    if '/' in original_name:
-        # Always get colors directly from theme manager for theme variants
-        # This ensures we get the correct colors from the theme package, not from config
-        # Config is only used to store user customizations, but on first run we should
-        # always use the theme package directly
+        original_name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+
+    logger.debug(
+        "get_color_scheme called with name=%s, original_name=%s", name, original_name
+    )
+
+    if "/" in original_name:
         try:
-            from spyder.utils.theme_manager import theme_manager
-            theme_name, ui_mode = original_name.rsplit('/', 1)
-            theme_name = theme_manager.normalize_theme_name(theme_name)
-            
-            # Get colors directly from theme manager (most reliable source)
-            # This loads from the installed theme package, not from config
-            # Use _load_theme_internal to bypass any caching and ensure we get the correct theme
+            from spyder.utils.theme_manager import ThemeManager, theme_manager
+
+            canonical = ThemeManager.resolve_theme_variant_id(original_name)
+            theme_name, ui_mode = canonical.rsplit("/", 1)
             palette, _ = theme_manager._load_theme_internal(theme_name, ui_mode)
-            
-            # Verify we got the right theme by checking the palette
-            # (palette should have theme-specific colors)
-            color_scheme = theme_manager.get_syntax_color_scheme(palette)
-            
-            # Debug: log which theme we're loading (can be removed later)
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Loading color scheme from theme: {theme_name}/{ui_mode}, background color: {color_scheme.get('background', 'N/A')}")
-            
-            # Export to config for next time so user customizations can be saved
-            # But we always use the theme package as the source of truth
-            # Export using the original_name format so it matches what will be read later
-            try:
-                # Export with the theme_name (spyder_themes.spyder) and ui_mode
-                theme_manager.export_theme_to_config(theme_name, ui_mode, replace=True)
-                # Also export with the original_name format if it's different
-                # This ensures config keys match what will be read later
-                if original_name != f"{theme_name}/{ui_mode}":
-                    # If original_name was different (e.g., "spyder/dark" vs "spyder_themes.spyder/dark"),
-                    # we need to also save it with that format for backward compatibility
-                    from spyder.config.gui import set_color_scheme
-                    set_color_scheme(original_name, color_scheme, replace=True)
-            except Exception:
-                pass  # Don't fail if export doesn't work
-            
-            return color_scheme
+            base = theme_manager.get_syntax_color_scheme(palette)
+            prefixes = [canonical]
+            if original_name != canonical:
+                prefixes.append(original_name)
+            merged = {}
+            for key in COLOR_SCHEME_KEYS:
+                override = _appearance_syntax_override(prefixes, key)
+                merged[key] = override if override is not None else base[key]
+            logger.debug(
+                "Merged theme %s/%s with config overrides (canonical=%s)",
+                theme_name,
+                ui_mode,
+                canonical,
+            )
+            return merged
         except Exception as e:
-            # If we can't get from theme manager, try config with defaults as fallback
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to get colors from theme manager for {original_name}: {e}")
-            # Fall through to config reading with defaults
-    
-    # Try to read from config (for subsequent runs or if theme manager failed)
-    # But only if we're sure all colors exist - otherwise get from theme manager
+            logger.warning(
+                "Failed to merge theme variant colors for %s: %s", original_name, e
+            )
+
     scheme = {}
     missing_in_config = []
     for key in COLOR_SCHEME_KEYS:
         try:
-            scheme[key] = CONF.get('appearance', f'{original_name}/{key}')
+            scheme[key] = CONF.get("appearance", f"{original_name}/{key}")
         except Exception:
             missing_in_config.append(key)
-    
-    # If any colors are missing, don't use partial config data - get all from theme manager
-    if missing_in_config and '/' in original_name:
+
+    if missing_in_config and "/" in original_name:
         try:
-            from spyder.utils.theme_manager import theme_manager
-            theme_name, ui_mode = original_name.rsplit('/', 1)
+            from spyder.utils.theme_manager import ThemeManager, theme_manager
+
+            canonical = ThemeManager.resolve_theme_variant_id(original_name)
+            theme_name, ui_mode = canonical.rsplit("/", 1)
             palette, _ = theme_manager._load_theme_internal(theme_name, ui_mode)
             theme_colors = theme_manager.get_syntax_color_scheme(palette)
-            # Use ALL colors from theme manager, not a mix
-            scheme = theme_colors
-            # Also export to config for next time
-            try:
-                theme_manager.export_theme_to_config(theme_name, ui_mode, replace=True)
-            except Exception:
-                pass  # Don't fail if export doesn't work
+            for key in missing_in_config:
+                scheme[key] = theme_colors[key]
         except Exception as e:
-            # If we can't get from theme, use defaults for missing keys
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to get missing colors from theme: {e}")
+            logger.warning("Failed to fill missing colors from theme: %s", e)
             for key in missing_in_config:
                 scheme[key] = COLOR_SCHEME_DEFAULT_VALUES[key]
     elif missing_in_config:
-        # Not a theme variant, just use defaults
         for key in missing_in_config:
             scheme[key] = COLOR_SCHEME_DEFAULT_VALUES[key]
-    
+
     return scheme
 
 

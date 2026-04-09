@@ -87,27 +87,39 @@ class ThemeManager:
         return sorted(variants)
 
     @staticmethod
-    def normalize_theme_name(theme_name):
+    def resolve_theme_variant_id(theme_variant):
         """
-        Normalize a theme name to the correct format.
-        
-        Ensures theme names have the 'spyder_themes.' prefix if they don't already.
-        Handles both old format (e.g., 'spyder') and new format (e.g., 'spyder_themes.spyder').
-        
+        Map a stored ``selected`` value to a registered theme variant id.
+
+        Accepts legacy ids (e.g. ``spyder/dark``) when a matching entry exists
+        in :meth:`get_available_theme_variants` after applying the
+        ``spyder_themes.`` package prefix to the module segment.
+
         Parameters
         ----------
-        theme_name : str
-            Theme name in any format
-            
+        theme_variant : str
+            Theme variant as stored in config (e.g. ``spyder_themes.spyder/dark``).
+
         Returns
         -------
         str
-            Normalized theme name with 'spyder_themes.' prefix
+            Canonical variant id if found in the registry; otherwise the
+            best-effort normalized id (same rules as legacy normalization).
         """
-        if not theme_name.startswith('spyder_themes.'):
-            return f'spyder_themes.{theme_name}'
-        return theme_name
-    
+        if not theme_variant or "/" not in theme_variant:
+            return theme_variant
+        variants = ThemeManager.get_available_theme_variants()
+        if theme_variant in variants:
+            return theme_variant
+        theme_part, mode = theme_variant.rsplit("/", 1)
+        if not theme_part.startswith("spyder_themes."):
+            candidate = f"spyder_themes.{theme_part}/{mode}"
+        else:
+            candidate = theme_variant
+        if candidate in variants:
+            return candidate
+        return candidate
+
     @staticmethod
     def get_theme_display_name(theme_variant):
         """
@@ -545,8 +557,6 @@ APPEARANCE = {
     "monospace_app_font/size": 0,
     "monospace_app_font/italic": False,
     "monospace_app_font/bold": False,
-    # List of available theme variants (will be populated dynamically)
-    "names": [],
     # Default to spyder_themes.spyder/dark if no selection exists
     "selected": "spyder_themes.spyder/dark",
 }

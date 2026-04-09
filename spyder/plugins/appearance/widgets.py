@@ -66,13 +66,6 @@ class SchemeEditor(QDialog):
         self.last_used_scheme = scheme_name
         self.original_scheme = self.get_edited_color_scheme()
 
-    def get_scheme_name(self):
-        """
-        Returns the edited scheme name, needed to update the combobox on
-        scheme creation.
-        """
-        return self.scheme_name_textbox[self.last_used_scheme].text()
-
     def validate_colors(self):
         """
         Validate the current color scheme and display a message box listing
@@ -138,8 +131,8 @@ class SchemeEditor(QDialog):
 
     # Actions
     # -------------------------------------------------------------------------
-    def add_color_scheme_stack(self, scheme_name, custom=False):
-        """Add a stack for a given scheme and connects the CONF values."""
+    def add_color_scheme_stack(self, scheme_name):
+        """Add a stack for a given scheme and connect CONF values."""
         color_scheme_groups = [
             (_('Text'), ["normal", "comment", "string", "number", "keyword",
                          "builtin", "definition", "instance", ]),
@@ -176,8 +169,7 @@ class SchemeEditor(QDialog):
         name_layout.addWidget(self.line_edit.textbox)
         self.scheme_name_textbox[scheme_name] = self.line_edit.textbox
 
-        if not custom:
-            self.line_edit.textbox.setDisabled(True)
+        self.line_edit.textbox.setDisabled(True)
         if not self.isVisible():
             self.line_edit.setVisible(False)
 
@@ -187,31 +179,44 @@ class SchemeEditor(QDialog):
         h_layout = QHBoxLayout()
         v_layout = QVBoxLayout()
 
-        for index, item in enumerate(color_scheme_groups):
+        resolved = None
+
+        def value_for_key(k):
+            nonlocal resolved
+            opt = "{0}/{1}".format(scheme_name, k)
+            try:
+                return self.parent.get_option(opt)
+            except Exception:
+                if resolved is None:
+                    resolved = syntaxhighlighters.get_color_scheme(scheme_name)
+                return resolved[k]
+
+        for index, item in enumerate[tuple[str, list[str]]](color_scheme_groups):
             group_name, keys = item
             group_layout = QGridLayout()
 
             for row, key in enumerate(keys):
                 option = "{0}/{1}".format(scheme_name, key)
-                value = self.parent.get_option(option)
+                value = value_for_key(key)
                 name = syntaxhighlighters.COLOR_SCHEME_KEYS[key]
 
                 if isinstance(value, str):
                     label, clayout = parent.create_coloredit(
                         name,
                         option,
+                        default=value,
                         without_layout=True,
                         )
                     label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     group_layout.addWidget(label, row+1, 0)
                     group_layout.addLayout(clayout, row+1, 1)
 
-                    # Needed to update temp scheme to obtain instant preview
                     self.widgets[scheme_name][key] = [clayout]
                 else:
                     label, clayout, cb_bold, cb_italic = parent.create_scedit(
                         name,
                         option,
+                        default=value,
                         without_layout=True,
                         )
                     label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -220,7 +225,6 @@ class SchemeEditor(QDialog):
                     group_layout.addWidget(cb_bold, row+1, 2)
                     group_layout.addWidget(cb_italic, row+1, 3)
 
-                    # Needed to update temp scheme to obtain instant preview
                     self.widgets[scheme_name][key] = [clayout, cb_bold,
                                                       cb_italic]
 
@@ -240,22 +244,21 @@ class SchemeEditor(QDialog):
         self.stack.addWidget(stackitem)
         self.order.append(scheme_name)
 
-    def delete_color_scheme_stack(self, scheme_name):
-        """Remove stack widget by 'scheme_name'."""
-        self.set_scheme(scheme_name)
-        widget = self.stack.currentWidget()
-        self.stack.removeWidget(widget)
-        index = self.order.index(scheme_name)
-        self.order.pop(index)
-
     def restore_original_scheme(self, scheme_name):
         "Restores the original values of the scheme being edited."
         parent = self.parent
-        
-        # Read theme name from config (all themes now have this field)
-        self.line_edit.textbox.setText(
-            str(parent.get_option('{0}/name'.format(scheme_name)))
-        )
+
+        name_opt = "{0}/name".format(scheme_name)
+        try:
+            display = str(parent.get_option(name_opt))
+        except Exception:
+            try:
+                from spyder.utils.theme_manager import theme_manager
+
+                display = theme_manager.get_theme_display_name(scheme_name)
+            except Exception:
+                display = scheme_name
+        self.scheme_name_textbox[scheme_name].setText(display)
 
         for key, value in self.original_scheme.items():
             if isinstance(value, tuple):

@@ -101,20 +101,17 @@ def get_color_scheme(name):
 def set_color_scheme(name, color_scheme, replace=True):
     """Set syntax color scheme"""
     section = "appearance"
-    names = CONF.get("appearance", "names", [])
     for key in sh.COLOR_SCHEME_KEYS:
         option = "%s/%s" % (name, key)
         value = CONF.get(section, option, default=None)
-        # Fix the logic to properly honor the replace parameter
-        if value is None or name not in names or replace:
+        if value is None or replace:
             CONF.set(section, option, color_scheme[key])
-    names.append(str(name))
-    CONF.set(section, "names", sorted(list(set(names))))
 
 
 def set_default_color_scheme(name, replace=True):
-    """Reset color scheme to default values"""
-    assert name in sh.COLOR_SCHEME_NAMES
+    """Reset color scheme to default values for legacy ids in COLOR_SCHEME_NAMES."""
+    if name not in sh.COLOR_SCHEME_NAMES:
+        return
     set_color_scheme(name, sh.get_color_scheme(name), replace=replace)
 
 

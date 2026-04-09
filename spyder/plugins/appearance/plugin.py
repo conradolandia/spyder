@@ -17,9 +17,7 @@ from spyder.api.plugin_registration.decorators import (
 )
 from spyder.api.plugins import Plugins, SpyderPluginV2
 from spyder.api.translations import _
-from spyder.config.manager import CONF
 from spyder.plugins.appearance.confpage import AppearanceConfigPage
-from spyder.utils.theme_manager import theme_manager
 
 
 # --- Plugin
@@ -53,10 +51,7 @@ class Appearance(SpyderPluginV2):
         return cls.create_icon('eyedropper')
 
     def on_initialize(self):
-        """Initialize the appearance plugin."""
-        # Don't discover all themes at startup - this loads all theme resources unnecessarily
-        # Theme names will be populated lazily when the preferences page is opened
-        # or when themes are actually needed
+        """Satisfy SpyderPluginV2 (base raises NotImplementedError if missing)."""
         pass
 
     @on_plugin_available(plugin=Plugins.Preferences)

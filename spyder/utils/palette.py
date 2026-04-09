@@ -37,18 +37,9 @@ def _get_theme_palette():
         # This ensures the selected theme's colors are available
         # Don't export all themes as it loads all theme resources unnecessarily
         # Only do this if config is ready to avoid segfaults
+        from spyder.utils.theme_manager import ThemeManager
+
         if _is_conf_ready():
-            try:
-                from spyder.config.manager import CONF
-                selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
-                if '/' in selected:
-                    theme_name, ui_mode = selected.rsplit('/', 1)
-                    theme_name = theme_manager.normalize_theme_name(theme_name)
-                    theme_manager.export_theme_to_config(theme_name, ui_mode, replace=True)
-            except Exception as theme_exp:
-                logger.warning(f"Failed to export selected theme to config: {theme_exp}")
-            
-            # Get selected theme from config
             try:
                 from spyder.config.manager import CONF
                 selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
@@ -56,21 +47,27 @@ def _get_theme_palette():
                 logger.warning(f"Config not available yet, using default theme: {conf_error}")
                 selected = "spyder_themes.spyder/dark"
         else:
-            # Config not ready, use default theme
             logger.debug("Config not ready yet, using default theme")
             selected = "spyder_themes.spyder/dark"
-        
-        # Parse theme name and mode from the selected variant
+
+        selected = ThemeManager.resolve_theme_variant_id(selected)
+
+        if _is_conf_ready():
+            try:
+                if "/" in selected:
+                    theme_name, ui_mode = selected.rsplit("/", 1)
+                    theme_manager.export_theme_to_config(
+                        theme_name, ui_mode, replace=False
+                    )
+            except Exception as theme_exp:
+                logger.warning(f"Failed to export selected theme to config: {theme_exp}")
+
         if "/" in selected:
             theme_name, ui_mode = selected.rsplit("/", 1)
         else:
-            # Fallback for old config format
             theme_name = selected
             ui_mode = "dark"
-        
-        # Normalize theme name to ensure correct format
-        theme_name = theme_manager.normalize_theme_name(theme_name)
-        
+
         # Load the theme
         palette_class, _ = theme_manager.load_theme(theme_name, ui_mode)
         return palette_class
