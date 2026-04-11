@@ -169,7 +169,7 @@ def main():
             from spyder.utils.theme_manager import ThemeManager, theme_manager
             # Get the selected theme and export only that one
             selected = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
-            resolved = ThemeManager.resolve_theme_variant_id(selected)
+            resolved = ThemeManager.canonical_theme_variant_id(selected)
             if resolved != selected:
                 CONF.set('appearance', 'selected', resolved)
             selected = resolved

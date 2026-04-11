@@ -94,11 +94,6 @@ COLOR_SCHEME_DEFAULT_VALUES = {
     "magic":      ("#c670e0", False, False),
 }
 
-# Legacy syntax scheme ids (no ``theme/mode`` variant) seeded into config at
-# import time by ``spyder.config.gui``. Theme variants from packages are not
-# listed here; they are discovered via ThemeManager.get_available_theme_variants().
-COLOR_SCHEME_NAMES = ()
-
 # Mapping for file extensions that use Pygments highlighting but should use
 # different lexers than Pygments' autodetection suggests.  Keys are file
 # extensions or tuples of extensions, values are Pygments lexer names.
@@ -135,83 +130,74 @@ def get_span(match, key=None):
     return start16, end16
 
 
-def _appearance_syntax_override(variant_prefixes, key):
-    """Return a user-stored syntax value for ``key`` if present, else None."""
-    for prefix in variant_prefixes:
-        if not prefix or "/" not in prefix:
-            continue
-        try:
-            return CONF.get(
-                "appearance", f"{prefix}/{key}", default=NoDefault
-            )
-        except Exception:
-            continue
-    return None
+def _syntax_override_for_variant(canonical_variant, key):
+    """Return user-stored syntax value for ``canonical_variant``/``key`` if set."""
+    try:
+        return CONF.get(
+            "appearance",
+            f"{canonical_variant}/{key}",
+            default=NoDefault,
+        )
+    except Exception:
+        return None
 
 
 def get_color_scheme(name):
     """
     Resolve syntax colors for a scheme id.
 
-    Theme variants (``package.theme/mode``) use the installed theme palette as
-    the base and apply per-key overrides from the ``appearance`` section when
-    those options exist (user edits in Preferences).
+    Theme variants (``spyder_themes.<theme>/<mode>``) use the installed theme
+    palette as the base and apply per-key overrides from the ``appearance``
+    section when those options exist (user edits in Preferences).
     """
     import logging
 
     logger = logging.getLogger(__name__)
 
-    if name and name.lower() == "spyder":
+    # Highlighter default ``'Spyder'`` means "use the current appearance selection",
+    # not a concrete variant id.
+    if name and str(name).lower() == "spyder":
         name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
 
-    original_name = name
-    if not original_name:
-        original_name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
+    if not name:
+        name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
 
-    logger.debug(
-        "get_color_scheme called with name=%s, original_name=%s", name, original_name
-    )
+    from spyder.utils.theme_manager import ThemeManager, theme_manager
 
-    if "/" in original_name:
+    canonical = ThemeManager.canonical_theme_variant_id(name)
+
+    logger.debug("get_color_scheme called with name=%s, canonical=%s", name, canonical)
+
+    if "/" in canonical:
         try:
-            from spyder.utils.theme_manager import ThemeManager, theme_manager
-
-            canonical = ThemeManager.resolve_theme_variant_id(original_name)
             theme_name, ui_mode = canonical.rsplit("/", 1)
             palette, _ = theme_manager._load_theme_internal(theme_name, ui_mode)
             base = theme_manager.get_syntax_color_scheme(palette)
-            prefixes = [canonical]
-            if original_name != canonical:
-                prefixes.append(original_name)
             merged = {}
             for key in COLOR_SCHEME_KEYS:
-                override = _appearance_syntax_override(prefixes, key)
+                override = _syntax_override_for_variant(canonical, key)
                 merged[key] = override if override is not None else base[key]
             logger.debug(
-                "Merged theme %s/%s with config overrides (canonical=%s)",
+                "Merged theme %s/%s with config overrides",
                 theme_name,
                 ui_mode,
-                canonical,
             )
             return merged
         except Exception as e:
             logger.warning(
-                "Failed to merge theme variant colors for %s: %s", original_name, e
+                "Failed to merge theme variant colors for %s: %s", canonical, e
             )
 
     scheme = {}
     missing_in_config = []
     for key in COLOR_SCHEME_KEYS:
         try:
-            scheme[key] = CONF.get("appearance", f"{original_name}/{key}")
+            scheme[key] = CONF.get("appearance", f"{canonical}/{key}")
         except Exception:
             missing_in_config.append(key)
 
-    if missing_in_config and "/" in original_name:
+    if missing_in_config and "/" in canonical:
         try:
-            from spyder.utils.theme_manager import ThemeManager, theme_manager
-
-            canonical = ThemeManager.resolve_theme_variant_id(original_name)
             theme_name, ui_mode = canonical.rsplit("/", 1)
             palette, _ = theme_manager._load_theme_internal(theme_name, ui_mode)
             theme_colors = theme_manager.get_syntax_color_scheme(palette)

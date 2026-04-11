@@ -161,10 +161,16 @@ def is_dark_interface():
     
     try:
         from spyder.config.manager import CONF
-        
+
         # Use default value if config doesn't exist or isn't initialized yet
         selected = CONF.get("appearance", "selected", "spyder_themes.spyder/dark")
-        
+        # Same rule as ThemeManager.canonical_theme_variant_id (no ThemeManager
+        # import here: circular dependency with theme_manager).
+        if selected and "/" in selected:
+            theme_part, ui_mode = selected.rsplit("/", 1)
+            if not theme_part.startswith("spyder_themes."):
+                selected = f"spyder_themes.{theme_part}/{ui_mode}"
+
         if "/" in selected:
             _, ui_mode = selected.rsplit("/", 1)
             return ui_mode == "dark"

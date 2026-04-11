@@ -108,27 +108,8 @@ def set_color_scheme(name, color_scheme, replace=True):
             CONF.set(section, option, color_scheme[key])
 
 
-def set_default_color_scheme(name, replace=True):
-    """Reset color scheme to default values for legacy ids in COLOR_SCHEME_NAMES."""
-    if name not in sh.COLOR_SCHEME_NAMES:
-        return
-    set_color_scheme(name, sh.get_color_scheme(name), replace=replace)
-
-
 def is_dark_font_color(color_scheme):
     """Check if the font color used in the color scheme is dark."""
     color_scheme = get_color_scheme(color_scheme)
     font_color, fon_fw, fon_fs = color_scheme['normal']
     return dark_color(font_color)
-
-
-# Initialize default color schemes only for old-style themes
-# New theme variants (with '/') are populated on-demand by ThemeManager
-for _name in sh.COLOR_SCHEME_NAMES:
-    # Skip new theme variants - they're handled by ThemeManager
-    if '/' not in _name:
-        try:
-            set_default_color_scheme(_name, replace=True)
-        except Exception:
-            # Theme doesn't have defaults in old format, skip it
-            pass

@@ -50,7 +50,7 @@ def _get_theme_palette():
             logger.debug("Config not ready yet, using default theme")
             selected = "spyder_themes.spyder/dark"
 
-        selected = ThemeManager.resolve_theme_variant_id(selected)
+        selected = ThemeManager.canonical_theme_variant_id(selected)
 
         if _is_conf_ready():
             try:

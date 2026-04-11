@@ -300,7 +300,7 @@ def create_application():
         if _is_conf_ready():
             # Load the selected theme (this will load its stylesheet and resources)
             selected = CONF.get('appearance', 'selected', default='spyder_themes.spyder/dark')
-            resolved = ThemeManager.resolve_theme_variant_id(selected)
+            resolved = ThemeManager.canonical_theme_variant_id(selected)
             if resolved != selected:
                 CONF.set('appearance', 'selected', resolved)
             selected = resolved

@@ -67,7 +67,7 @@ class AppearanceConfigPage(PluginConfigPage):
                     CONF.set("appearance", f"{variant_name}/name", display_name)
 
             selected = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
-            resolved = ThemeManager.resolve_theme_variant_id(selected)
+            resolved = ThemeManager.canonical_theme_variant_id(selected)
             if resolved != selected:
                 CONF.set("appearance", "selected", resolved)
                 selected = resolved
@@ -490,7 +490,7 @@ class AppearanceConfigPage(PluginConfigPage):
         # Find and select the current theme (by value, not index)
         index = combobox.findData(current_scheme)
         if index == -1:
-            # Theme not found, default to spyder/dark
+            # Theme not found, default to bundled dark variant
             index = combobox.findData('spyder_themes.spyder/dark')
         if index == -1:
             # Still not found, just use first item
@@ -583,24 +583,13 @@ class AppearanceConfigPage(PluginConfigPage):
         names = self._builtin_theme_variants()
 
         if scheme in names:
-            # Check if this is a new theme variant (contains '/')
-            if '/' in scheme:
-                # New theme system: extract theme from ThemeManager and export
-                from spyder.utils.theme_manager import theme_manager
-                try:
-                    theme_name, ui_mode = scheme.rsplit('/', 1)
-                    # Export with replace=True to overwrite user customizations
-                    theme_manager.export_theme_to_config(
-                        theme_name, ui_mode, replace=True
-                    )
-                except Exception:
-                    # Fallback to old method if extraction fails
-                    for key in syntaxhighlighters.COLOR_SCHEME_KEYS:
-                        option = "{0}/{1}".format(scheme, key)
-                        value = CONF.get_default(self.CONF_SECTION, option)
-                        self.set_option(option, value)
-            else:
-                # Old theme system
+            from spyder.utils.theme_manager import theme_manager
+            try:
+                theme_name, ui_mode = scheme.rsplit('/', 1)
+                theme_manager.export_theme_to_config(
+                    theme_name, ui_mode, replace=True
+                )
+            except Exception:
                 for key in syntaxhighlighters.COLOR_SCHEME_KEYS:
                     option = "{0}/{1}".format(scheme, key)
                     value = CONF.get_default(self.CONF_SECTION, option)

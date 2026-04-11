@@ -87,38 +87,30 @@ class ThemeManager:
         return sorted(variants)
 
     @staticmethod
-    def resolve_theme_variant_id(theme_variant):
+    def canonical_theme_variant_id(variant):
         """
-        Map a stored ``selected`` value to a registered theme variant id.
+        Normalize a theme variant id to the ``spyder_themes.<module>/<mode>`` form.
 
-        Accepts legacy ids (e.g. ``spyder/dark``) when a matching entry exists
-        in :meth:`get_available_theme_variants` after applying the
-        ``spyder_themes.`` package prefix to the module segment.
+        If the segment before ``/`` already starts with ``spyder_themes.``,
+        ``variant`` is returned unchanged. Legacy values like ``spyder/dark``
+        become ``spyder_themes.spyder/dark``.
 
         Parameters
         ----------
-        theme_variant : str
-            Theme variant as stored in config (e.g. ``spyder_themes.spyder/dark``).
+        variant : str
+            Theme variant string, or empty.
 
         Returns
         -------
         str
-            Canonical variant id if found in the registry; otherwise the
-            best-effort normalized id (same rules as legacy normalization).
+            Canonical variant id, or the original value if it has no ``/``.
         """
-        if not theme_variant or "/" not in theme_variant:
-            return theme_variant
-        variants = ThemeManager.get_available_theme_variants()
-        if theme_variant in variants:
-            return theme_variant
-        theme_part, mode = theme_variant.rsplit("/", 1)
+        if not variant or "/" not in variant:
+            return variant
+        theme_part, mode = variant.rsplit("/", 1)
         if not theme_part.startswith("spyder_themes."):
-            candidate = f"spyder_themes.{theme_part}/{mode}"
-        else:
-            candidate = theme_variant
-        if candidate in variants:
-            return candidate
-        return candidate
+            return f"spyder_themes.{theme_part}/{mode}"
+        return variant
 
     @staticmethod
     def get_theme_display_name(theme_variant):
@@ -136,6 +128,10 @@ class ThemeManager:
             User-friendly display name (e.g., 'Dracula Dark')
         """
         try:
+            if "/" in theme_variant:
+                theme_variant = ThemeManager.canonical_theme_variant_id(
+                    theme_variant
+                )
             # Extract base theme name and mode
             if "/" in theme_variant:
                 theme_path, mode = theme_variant.rsplit("/", 1)
