@@ -72,6 +72,7 @@ COLOR_SCHEME_KEYS = {
     "number":         _("Number:"),
     "instance":       _("Instance:"),
     "magic":          _("Magic:"),
+    "symbol":         _("Symbol:"),
 }
 
 COLOR_SCHEME_DEFAULT_VALUES = {
@@ -92,6 +93,7 @@ COLOR_SCHEME_DEFAULT_VALUES = {
     "number":     ("#faed5c", False, False),
     "instance":   ("#ee6772", False, True),
     "magic":      ("#c670e0", False, False),
+    "symbol":     ("#ff0000", False, False),
 }
 
 # Mapping for file extensions that use Pygments highlighting but should use
@@ -132,14 +134,20 @@ def get_span(match, key=None):
 
 def _syntax_override_for_variant(canonical_variant, key):
     """Return user-stored syntax value for ``canonical_variant``/``key`` if set."""
-    try:
-        return CONF.get(
-            "appearance",
-            f"{canonical_variant}/{key}",
-            default=NoDefault,
-        )
-    except Exception:
-        return None
+    keys = (key,)
+    # Legacy: master stored this color as ``symbols``.
+    if key == "symbol":
+        keys = (key, "symbols")
+    for opt_key in keys:
+        try:
+            return CONF.get(
+                "appearance",
+                f"{canonical_variant}/{opt_key}",
+                default=NoDefault,
+            )
+        except Exception:
+            continue
+    return None
 
 
 def get_color_scheme(name):
@@ -194,7 +202,13 @@ def get_color_scheme(name):
         try:
             scheme[key] = CONF.get("appearance", f"{canonical}/{key}")
         except Exception:
-            missing_in_config.append(key)
+            if key == "symbol":
+                try:
+                    scheme[key] = CONF.get("appearance", f"{canonical}/symbols")
+                except Exception:
+                    missing_in_config.append(key)
+            else:
+                missing_in_config.append(key)
 
     if missing_in_config and "/" in canonical:
         try:
@@ -522,7 +536,7 @@ def make_python_patterns(additional_keywords=None, additional_builtins=None):
     for repeated_element in repeated:
         kwlist.remove(repeated_element)
     kw = r"\b" + any("keyword", kwlist) + r"\b"
-    builtin = r"([^.'\"\\#]\b|^)" + any("builtin", builtinlist) + r"\b"
+    builtin = r"(?<![.'\"\\#])\b" + any("builtin", builtinlist) + r"\b"
     comment = any("comment", [r"#[^\n]*"])
     instance = any("instance", [r"\bself\b",
                                 r"\bcls\b",
@@ -571,9 +585,10 @@ def make_python_patterns(additional_keywords=None, additional_builtins=None):
     ufstring4 = any("uf_dq3string", [uf_dq3string])
     ufstring5 = any("ufe_sqstring", [ufe_sqstring])
     ufstring6 = any("ufe_dqstring", [ufe_dqstring])
+    symbol_pat = r"(?P<symbol>[()\[\]{}:=<>.,%+\-*/&|~;!])"
     return "|".join([instance, kw, builtin, comment, match_kw, case_kw,
                      ufstring1, ufstring2, ufstring3, ufstring4, ufstring5,
-                     ufstring6, string, number, any("SYNC", [r"\n"])])
+                     ufstring6, string, number, symbol_pat, any("SYNC", [r"\n"])])
 
 
 def make_ipython_patterns(additional_keywords=[], additional_builtins=[]):

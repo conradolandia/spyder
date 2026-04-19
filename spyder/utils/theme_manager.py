@@ -215,6 +215,7 @@ class ThemeManager:
             "number": palette.EDITOR_NUMBER,
             "instance": palette.EDITOR_INSTANCE,
             "magic": palette.EDITOR_MAGIC,
+            "symbol": palette.EDITOR_SYMBOL,
         }
 
         return color_scheme
@@ -416,6 +417,7 @@ class ThemeManager:
             "number": palette.EDITOR_NUMBER,
             "instance": palette.EDITOR_INSTANCE,
             "magic": palette.EDITOR_MAGIC,
+            "symbol": palette.EDITOR_SYMBOL,
         }
 
         # Set all colors directly in the config

@@ -789,6 +789,8 @@ def test_inline_completions_highlighting(codeeditor, os_name):
     regular_def_color = hl.formats["definition"].foreground().color()
     inline_def_color = hl.inline_formats["definition"].foreground().color()
 
+    inline_symbol_color = hl.inline_formats["symbol"].foreground().color()
+
     # Auxiliary function
     def get_fmt_for_position_in_block(
         position: int, inline: bool = False
@@ -930,8 +932,8 @@ def test_inline_completions_highlighting(codeeditor, os_name):
         inline_def_color.alphaF(),
     ]
     assert get_fmt_for_position_in_block(9, inline=True) == [
-        inline_normal_color.name(),
-        inline_normal_color.alphaF(),
+        inline_symbol_color.name(),
+        inline_symbol_color.alphaF(),
     ]
 
     # Move position to next block and check formats
