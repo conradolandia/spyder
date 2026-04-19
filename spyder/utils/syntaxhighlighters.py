@@ -134,20 +134,14 @@ def get_span(match, key=None):
 
 def _syntax_override_for_variant(canonical_variant, key):
     """Return user-stored syntax value for ``canonical_variant``/``key`` if set."""
-    keys = (key,)
-    # Legacy: master stored this color as ``symbols``.
-    if key == "symbol":
-        keys = (key, "symbols")
-    for opt_key in keys:
-        try:
-            return CONF.get(
-                "appearance",
-                f"{canonical_variant}/{opt_key}",
-                default=NoDefault,
-            )
-        except Exception:
-            continue
-    return None
+    try:
+        return CONF.get(
+            "appearance",
+            f"{canonical_variant}/{key}",
+            default=NoDefault,
+        )
+    except Exception:
+        return None
 
 
 def get_color_scheme(name):
@@ -202,13 +196,7 @@ def get_color_scheme(name):
         try:
             scheme[key] = CONF.get("appearance", f"{canonical}/{key}")
         except Exception:
-            if key == "symbol":
-                try:
-                    scheme[key] = CONF.get("appearance", f"{canonical}/symbols")
-                except Exception:
-                    missing_in_config.append(key)
-            else:
-                missing_in_config.append(key)
+            missing_in_config.append(key)
 
     if missing_in_config and "/" in canonical:
         try:

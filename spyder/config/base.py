@@ -164,12 +164,10 @@ def is_dark_interface():
 
         # Use default value if config doesn't exist or isn't initialized yet
         selected = CONF.get("appearance", "selected", "spyder_themes.spyder/dark")
-        # Same rule as ThemeManager.canonical_theme_variant_id (no ThemeManager
-        # import here: circular dependency with theme_manager).
-        if selected and "/" in selected:
-            theme_part, ui_mode = selected.rsplit("/", 1)
-            if not theme_part.startswith("spyder_themes."):
-                selected = f"spyder_themes.{theme_part}/{ui_mode}"
+        # Import here so spyder.config.base can load before spyder.utils.theme_manager.
+        from spyder.utils.theme_manager import ThemeManager
+
+        selected = ThemeManager.canonical_theme_variant_id(selected)
 
         if "/" in selected:
             _, ui_mode = selected.rsplit("/", 1)
