@@ -530,7 +530,16 @@ class UserConfig(DefaultsConfig):
         elif isinstance(default_value, int):
             value = int(value)
         elif isinstance(default_value, str):
-            pass
+            # Some INI rows store a Python-quoted string (e.g. ``'#aabbcc'`` for
+            # a color) so the ``#`` is not parsed as a comment. Unwrap one level
+            # so callers get a plain ``#...`` hex string.
+            if isinstance(value, str) and len(value) >= 4 and value[0] in '\'"':
+                try:
+                    ev = ast.literal_eval(value)
+                    if isinstance(ev, str) and ev.startswith('#'):
+                        value = ev
+                except (SyntaxError, ValueError, TypeError):
+                    pass
         else:
             try:
                 # Lists, tuples, ...
@@ -933,6 +942,11 @@ class MultiUserConfig(object):
         """Return all the options for the given section."""
         config = self._get_config(section, None)
         return config.options(section=section)
+
+    def has_option(self, section, option):
+        """Return whether *option* exists in *section* in the right backing file."""
+        config = self._get_config(section, option)
+        return config.has_option(section, option)
 
     def get_default(self, section, option):
         """

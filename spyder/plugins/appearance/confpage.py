@@ -562,8 +562,9 @@ class AppearanceConfigPage(PluginConfigPage):
         dlg.rejected.connect(lambda: self.apply_button_enabled.emit(False))
 
         if dlg.exec_():
-            # Edits are already stored under ``{current_scheme}/{key}`` via CONF;
-            # merged colors come from get_color_scheme (theme base + overrides).
+            # Syntax values are in widgets and ``changed_options`` until the user
+            # clicks **Apply** (or **OK** on the main Preferences dialog), which
+            # runs :meth:`save_to_conf` / ``apply_changes``.
             self._remove_temp_syntax_options()
             self.scheme_choices_dict.pop("temp", None)
             self.update_editor_preview()

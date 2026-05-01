@@ -222,43 +222,32 @@ class ThemeManager:
 
     def export_theme_to_config(self, theme_name, ui_mode, replace=False):
         """
-        Export theme syntax colors to user configuration file.
+        Export theme data to the user configuration file.
 
-        Parameters
-        ----------
-        theme_name : str
-            Name of the theme
-        ui_mode : str
-            'dark' or 'light' mode
-        replace : bool, optional
-            If True, overwrites existing colors (for reset to defaults).
-            If False, only adds if not already present. Default is False.
+        When ``replace`` is True, writes the full package palette for the
+        variant (used when resetting a scheme). When False, only updates
+        the variant display name: colors are resolved at read time by merging
+        the installed theme with ``appearance`` overrides
+        (see ``syntaxhighlighters.get_color_scheme``), so the stock palette
+        is not written on every startup.
         """
-        # Import here to avoid circular dependency
-        from spyder.config.gui import set_color_scheme
         from spyder.config.manager import CONF
 
         # Remember current theme to restore later
         current_theme = self._current_theme
 
-        # Load the theme to get its palette (without auto-export to avoid circular calls)
-        palette, _ = self._load_theme_internal(theme_name, ui_mode)
-
-        # Get the syntax color scheme from the theme
-        color_scheme = self.get_syntax_color_scheme(palette)
-
         # Build the full theme variant name (e.g., "solarized/dark")
         variant_name = f"{theme_name}/{ui_mode}"
 
-        # Force direct update of colors in config when replace=True
         if replace:
+            # Load the theme to get its palette (without auto-export to avoid
+            # circular calls)
+            palette, _ = self._load_theme_internal(theme_name, ui_mode)
+            color_scheme = self.get_syntax_color_scheme(palette)
             section = "appearance"
             for key, value in color_scheme.items():
                 option = f"{variant_name}/{key}"
                 CONF.set(section, option, value)
-        else:
-            # Use set_color_scheme for normal operation (when not forcing replacement)
-            set_color_scheme(variant_name, color_scheme, replace=replace)
 
         # Also save the display name for the theme variant
         display_name = ThemeManager.get_theme_display_name(variant_name)
@@ -276,14 +265,12 @@ class ThemeManager:
 
     def export_all_themes_to_config(self):
         """
-        Export all available theme variants to config file.
+        Ensure every theme variant has a display name in the config.
 
-        This ensures all themes are available in the config for the preferences UI
-        and for users to customize. Only exports themes that don't already exist
-        in the config (doesn't overwrite user customizations).
+        Per-key colors are not written here: they are merged at read time
+        (package palette plus optional ``appearance`` overrides).
         """
         from spyder.config.manager import CONF
-        from spyder.utils.syntaxhighlighters import COLOR_SCHEME_KEYS
         import logging
 
         logger = logging.getLogger(__name__)
@@ -295,44 +282,17 @@ class ThemeManager:
             for ui_mode in self.get_theme_modes(theme_name):
                 variant_name = f"{theme_name}/{ui_mode}"
 
-                # Check if this theme variant exists and is complete in config
-                # For a theme to be considered complete, it needs all color keys
-                is_complete = True
                 try:
-                    # Check for name first
                     CONF.get("appearance", f"{variant_name}/name")
-
-                    # Then check for all required color keys
-                    for key in COLOR_SCHEME_KEYS:
-                        CONF.get("appearance", f"{variant_name}/{key}")
                 except Exception:
-                    # If any check fails, the theme is incomplete
-                    is_complete = False
-
-                if not is_complete:
-                    # Theme doesn't exist or is incomplete, we need to load it first
-                    # to get its proper colors, then export
                     try:
-                        # Load the theme palette without auto-exporting
-                        # (using internal method to avoid circular calls)
-                        palette, _ = self._load_theme_internal(theme_name, ui_mode)
-
-                        # Now manually extract colors from the correct palette and save to config
-                        color_scheme = self.get_syntax_color_scheme(palette)
-
-                        # Import here to avoid circular dependency
-                        from spyder.config.gui import set_color_scheme
-
-                        set_color_scheme(variant_name, color_scheme, replace=False)
-
-                        # Set the display name
-                        display_name = ThemeManager.get_theme_display_name(variant_name)
+                        display_name = ThemeManager.get_theme_display_name(
+                            variant_name
+                        )
                         CONF.set("appearance", f"{variant_name}/name", display_name)
-
-                        logger.info(f"Exported theme {variant_name} to config")
+                        logger.info("Registered theme name for %s in config", variant_name)
                     except Exception as e:
-                        # Log but don't fail if a theme can't be exported
-                        logger.warning(f"Failed to export theme {variant_name}: {e}")
+                        logger.warning("Failed to register theme name for %s: %s", variant_name, e)
 
         # Restore original theme if needed
         if current_theme and current_theme != self._current_theme:
@@ -438,22 +398,45 @@ class ThemeManager:
         theme_module = importlib.import_module(theme_name)
         theme_path = Path(theme_module.__path__[0])
 
-        # Construct stylesheet paths
+        # Construct stylesheet paths.
+        #
+        # Newer spyder-themes versions ship qtpy-based resource modules named
+        # ``darkstyle_rc.py`` and ``lightstyle_rc.py``. Keep support for older
+        # ``pyqt5_*_rc.py`` files as a fallback for compatibility.
         if ui_mode == "dark":
             qss_file = theme_path / "dark" / "darkstyle.qss"
-            rc_file = theme_path / "dark" / "pyqt5_darkstyle_rc.py"
+            rc_candidates = [
+                theme_path / "dark" / "darkstyle_rc.py",
+                theme_path / "dark" / "pyqt5_darkstyle_rc.py",
+            ]
         else:
             qss_file = theme_path / "light" / "lightstyle.qss"
-            rc_file = theme_path / "light" / "pyqt5_lightstyle_rc.py"
+            rc_candidates = [
+                theme_path / "light" / "lightstyle_rc.py",
+                theme_path / "light" / "pyqt5_lightstyle_rc.py",
+            ]
 
         if not qss_file.exists():
             raise ValueError(
                 f"Stylesheet not found for theme '{theme_name}' in {ui_mode} mode"
             )
 
+        rc_file = next((candidate for candidate in rc_candidates if candidate.exists()), None)
+        if rc_file is None:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(
+                "No theme resource module found for '%s' (%s mode). "
+                "Checked: %s",
+                theme_name,
+                ui_mode,
+                ", ".join(str(candidate) for candidate in rc_candidates),
+            )
+
         # Load the resources if they exist, but defer loading until Qt is initialized
         # Loading resources before Qt is ready can cause segfaults during Qt initialization
-        if rc_file.exists():
+        if rc_file is not None:
             # Store the resource file path for later loading
             # Don't load it now to avoid segfaults during Qt initialization
             # We'll load it later when Qt is fully initialized

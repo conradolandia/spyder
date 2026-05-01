@@ -135,13 +135,18 @@ def get_span(match, key=None):
 def _syntax_override_for_variant(canonical_variant, key):
     """Return user-stored syntax value for ``canonical_variant``/``key`` if set."""
     try:
-        return CONF.get(
+        v = CONF.get(
             "appearance",
             f"{canonical_variant}/{key}",
             default=NoDefault,
         )
     except Exception:
         return None
+    # Stale/invalid value from a prior bug where ``get(..., default=None)`` in
+    # ``set_color_scheme`` could persist the literal string ``"None"``.
+    if v is None or (isinstance(v, str) and v == "None"):
+        return None
+    return v
 
 
 def get_color_scheme(name):

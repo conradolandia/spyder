@@ -88,23 +88,23 @@ def set_font(font, section='appearance', option='font'):
 
 
 def get_color_scheme(name):
-    """Get syntax color scheme"""
-    color_scheme = {}
-    for key in sh.COLOR_SCHEME_KEYS:
-        color_scheme[key] = CONF.get(
-            "appearance",
-            "%s/%s" % (name, key),
-            default=sh.COLOR_SCHEME_DEFAULT_VALUES[key])
-    return color_scheme
+    """Get syntax color scheme (theme base merged with per-key appearance overrides)."""
+    return sh.get_color_scheme(name)
 
 
 def set_color_scheme(name, color_scheme, replace=True):
-    """Set syntax color scheme"""
+    """Set syntax color scheme.
+
+    When ``replace`` is False, only set keys that are not already present.
+    :meth:`ConfigurationManager.options` can disagree with the per-option
+    backing file used for :meth:`~ConfigurationManager.get` (multi-file
+    config), so we use :meth:`~ConfigurationManager.has_option` which follows
+    the same routing as ``get``/``set`` for that option.
+    """
     section = "appearance"
     for key in sh.COLOR_SCHEME_KEYS:
-        option = "%s/%s" % (name, key)
-        value = CONF.get(section, option, default=None)
-        if value is None or replace:
+        option = ("%s/%s" % (name, key)).lower()
+        if replace or not CONF.has_option(section, option):
             CONF.set(section, option, color_scheme[key])
 
 
