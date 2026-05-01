@@ -140,6 +140,9 @@ class ThemeManager:
                 mode = None
 
             # For package-based themes, extract the theme name from docstring
+            # TODO: This is a hack to get the theme name from the docstring.
+            # We should use the theme name from the theme module instead, 
+            # or just parse the them metadata from the file itself.
             if "." in theme_path:
                 # Import the theme module to get its metadata
                 theme_module = importlib.import_module(theme_path)
@@ -333,6 +336,11 @@ class ThemeManager:
         """
         Load a theme by name.
 
+        Loads the palette and stylesheet into this manager. Per-key syntax
+        colors are not written to the user config here; see
+        ``syntaxhighlighters.get_color_scheme`` for how editor colors are
+        resolved.
+
         Parameters
         ----------
         theme_name : str
@@ -353,42 +361,14 @@ class ThemeManager:
         self._current_palette = palette
         self._current_stylesheet = stylesheet
 
-        # Manually and directly ensure theme colors are saved to config
-        # This approach bypasses any potential module caching issues
-        # by using palette values directly from the loaded theme
         from spyder.config.manager import CONF
 
-        # Map palette attributes to config keys
-        palette_attrs = {
-            "background": palette.EDITOR_BACKGROUND,
-            "currentline": palette.EDITOR_CURRENTLINE,
-            "currentcell": palette.EDITOR_CURRENTCELL,
-            "occurrence": palette.EDITOR_OCCURRENCE,
-            "ctrlclick": palette.EDITOR_CTRLCLICK,
-            "sideareas": palette.EDITOR_SIDEAREAS,
-            "matched_p": palette.EDITOR_MATCHED_P,
-            "unmatched_p": palette.EDITOR_UNMATCHED_P,
-            "normal": palette.EDITOR_NORMAL,
-            "keyword": palette.EDITOR_KEYWORD,
-            "builtin": palette.EDITOR_BUILTIN,
-            "definition": palette.EDITOR_DEFINITION,
-            "comment": palette.EDITOR_COMMENT,
-            "string": palette.EDITOR_STRING,
-            "number": palette.EDITOR_NUMBER,
-            "instance": palette.EDITOR_INSTANCE,
-            "magic": palette.EDITOR_MAGIC,
-            "symbol": palette.EDITOR_SYMBOL,
-        }
-
-        # Set all colors directly in the config
         variant_name = f"{theme_name}/{ui_mode}"
-        for key, value in palette_attrs.items():
-            option = f"{variant_name}/{key}"
-            CONF.set("appearance", option, value)
-
-        # Also set the display name using the helper method
-        display_name = ThemeManager.get_theme_display_name(variant_name)
-        CONF.set("appearance", f"{variant_name}/name", display_name)
+        try:
+            CONF.get("appearance", f"{variant_name}/name")
+        except Exception:
+            display_name = ThemeManager.get_theme_display_name(variant_name)
+            CONF.set("appearance", f"{variant_name}/name", display_name)
 
         return palette, stylesheet
 

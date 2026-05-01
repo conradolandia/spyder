@@ -36,7 +36,10 @@ from spyder.plugins.editor.utils.editor import BlockUserData
 from spyder.utils.workers import WorkerManager
 from spyder.plugins.outlineexplorer.api import OutlineExplorerData
 from spyder.utils.qstringhelpers import qstring_length
+from spyder.utils.theme_manager import theme_manager
 
+import logging
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -138,13 +141,9 @@ def _syntax_override_for_variant(canonical_variant, key):
         v = CONF.get(
             "appearance",
             f"{canonical_variant}/{key}",
-            default=NoDefault,
         )
+        logger.debug("Syntax highlighter color scheme value: %s", v)
     except Exception:
-        return None
-    # Stale/invalid value from a prior bug where ``get(..., default=None)`` in
-    # ``set_color_scheme`` could persist the literal string ``"None"``.
-    if v is None or (isinstance(v, str) and v == "None"):
         return None
     return v
 
@@ -157,21 +156,12 @@ def get_color_scheme(name):
     palette as the base and apply per-key overrides from the ``appearance``
     section when those options exist (user edits in Preferences).
     """
-    import logging
 
-    logger = logging.getLogger(__name__)
-
-    # Highlighter default ``'Spyder'`` means "use the current appearance selection",
-    # not a concrete variant id.
-    if name and str(name).lower() == "spyder":
+    # Highlighter default ``'Spyder'``
+    if name and str(name).lower() == "spyder" or not name:
         name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
 
-    if not name:
-        name = CONF.get("appearance", "selected", default="spyder_themes.spyder/dark")
-
-    from spyder.utils.theme_manager import ThemeManager, theme_manager
-
-    canonical = ThemeManager.canonical_theme_variant_id(name)
+    canonical = theme_manager.canonical_theme_variant_id(name)
 
     logger.debug("get_color_scheme called with name=%s, canonical=%s", name, canonical)
 
@@ -182,7 +172,9 @@ def get_color_scheme(name):
             base = theme_manager.get_syntax_color_scheme(palette)
             merged = {}
             for key in COLOR_SCHEME_KEYS:
+                logger.debug("Syntax highlighter color scheme key: %s", key)
                 override = _syntax_override_for_variant(canonical, key)
+                logger.debug("Syntax highlighter color scheme override: %s", override)
                 merged[key] = override if override is not None else base[key]
             logger.debug(
                 "Merged theme %s/%s with config overrides",
