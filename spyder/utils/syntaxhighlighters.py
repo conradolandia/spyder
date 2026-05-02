@@ -172,9 +172,7 @@ def get_color_scheme(name):
             base = theme_manager.get_syntax_color_scheme(palette)
             merged = {}
             for key in COLOR_SCHEME_KEYS:
-                logger.debug("Syntax highlighter color scheme key: %s", key)
                 override = _syntax_override_for_variant(canonical, key)
-                logger.debug("Syntax highlighter color scheme override: %s", override)
                 merged[key] = override if override is not None else base[key]
             logger.debug(
                 "Merged theme %s/%s with config overrides",

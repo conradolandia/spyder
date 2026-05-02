@@ -9,13 +9,22 @@ Theme manager for Spyder's new theming system.
 """
 
 # Standard library imports
+from functools import lru_cache
 import importlib
+import logging
 from pathlib import Path
 
-# Local imports
+import yaml  # pyright: ignore[reportMissingModuleSource]
+
 from spyder.config.base import is_dark_interface, running_under_pytest
 from spyder.config.fonts import MEDIUM, MONOSPACE
 from spyder.plugins.help.utils.sphinxify import CSS_PATH
+
+logger = logging.getLogger(__name__)
+
+
+# Local imports
+
 
 
 class ThemeManager:
@@ -51,8 +60,18 @@ class ThemeManager:
                                 hasattr(theme_module, "SpyderPaletteDark")
                                 or hasattr(theme_module, "SpyderPaletteLight")
                             ):
+                                full_theme_name = f"{package_name}.{theme_name}"
+                                try:
+                                    ThemeManager.get_theme_metadata(full_theme_name)
+                                except Exception as exc:
+                                    logger.warning(
+                                        "Ignoring theme '%s': invalid or missing metadata: %s",
+                                        full_theme_name,
+                                        exc,
+                                    )
+                                    continue
                                 # Store full module path for loading
-                                themes.append(f"{package_name}.{theme_name}")
+                                themes.append(full_theme_name)
                         except (ImportError, AttributeError, ValueError):
                             # Skip invalid themes
                             pass
@@ -127,62 +146,100 @@ class ThemeManager:
         str
             User-friendly display name (e.g., 'Dracula Dark')
         """
+        metadata = ThemeManager.get_theme_metadata(theme_variant)
+        theme_name = metadata.get("name")
+        if not theme_name:
+            raise ValueError(
+                f"Theme metadata for '{theme_variant}' does not contain 'name'"
+            )
+
+        mode = metadata.get("mode")
+        if mode:
+            return f"{theme_name} ({str(mode).title()})"
+
+        return str(theme_name)
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def _load_theme_metadata(theme_name):
+        """
+        Load raw metadata from ``theme.yaml`` for a theme module.
+
+        Parameters
+        ----------
+        theme_name : str
+            Theme module path (e.g. ``spyder_themes.dracula``).
+
+        Returns
+        -------
+        dict
+            Parsed metadata mapping.
+
+        Raises
+        ------
+        ValueError
+            If the file is missing or contains invalid metadata.
+        """
+        theme_module = importlib.import_module(theme_name)
+        theme_path = Path(theme_module.__path__[0])
+        metadata_file = theme_path / "theme.yaml"
+
+        if not metadata_file.exists():
+            raise ValueError(f"Missing metadata file: {metadata_file}")
+
         try:
-            if "/" in theme_variant:
-                theme_variant = ThemeManager.canonical_theme_variant_id(
-                    theme_variant
-                )
-            # Extract base theme name and mode
-            if "/" in theme_variant:
-                theme_path, mode = theme_variant.rsplit("/", 1)
-            else:
-                theme_path = theme_variant
-                mode = None
+            with open(metadata_file, "r", encoding="utf-8") as fh:
+                metadata = yaml.safe_load(fh)
+        except Exception as exc:
+            raise ValueError(f"Failed to parse metadata file {metadata_file}: {exc}")
 
-            # For package-based themes, extract the theme name from docstring
-            # TODO: This is a hack to get the theme name from the docstring.
-            # We should use the theme name from the theme module instead, 
-            # or just parse the them metadata from the file itself.
-            if "." in theme_path:
-                # Import the theme module to get its metadata
-                theme_module = importlib.import_module(theme_path)
+        if not isinstance(metadata, dict):
+            raise ValueError(f"Theme metadata in {metadata_file} must be a mapping")
 
-                # Extract theme name from docstring
-                if theme_module.__doc__ and "Theme:" in theme_module.__doc__:
-                    lines = theme_module.__doc__.strip().split("\n")
-                    for line in lines:
-                        if line.strip().startswith("Theme:"):
-                            theme_name = line.split("Theme:")[1].strip()
-                            break
-                    else:
-                        # Fallback: use last part of path
-                        theme_name = (
-                            theme_path.split(".")[-1]
-                            .replace("-", " ")
-                            .replace("_", " ")
-                            .title()
-                        )
-                else:
-                    # Fallback: use last part of path
-                    theme_name = (
-                        theme_path.split(".")[-1]
-                        .replace("-", " ")
-                        .replace("_", " ")
-                        .title()
-                    )
-            else:
-                # Old-style theme, just capitalize
-                theme_name = theme_path.capitalize()
+        return metadata
 
-            # Add mode if present
-            if mode:
-                return f"{theme_name} ({mode.title()})"
-            else:
-                return theme_name
+    @staticmethod
+    def get_theme_metadata(theme_variant, field=None):
+        """
+        Get metadata for a theme variant from ``theme.yaml``.
 
-        except Exception:
-            # Ultimate fallback: just format the variant name
-            return theme_variant.replace("_", " ").replace(".", " ").title()
+        Parameters
+        ----------
+        theme_variant : str
+            Theme variant in format ``package.theme/mode`` or theme module path.
+        field : str, optional
+            Specific metadata field to return. If omitted, returns full metadata.
+
+        Returns
+        -------
+        dict or object
+            Full metadata mapping (plus runtime keys) or the selected field value.
+
+        Raises
+        ------
+        ValueError
+            If metadata is missing/invalid or requested field does not exist.
+        """
+        canonical = ThemeManager.canonical_theme_variant_id(theme_variant)
+        if "/" in canonical:
+            theme_name, mode = canonical.rsplit("/", 1)
+        else:
+            theme_name = canonical
+            mode = None
+
+        metadata = dict(ThemeManager._load_theme_metadata(theme_name))
+        metadata["theme"] = theme_name
+        metadata["mode"] = mode
+        metadata["id"] = canonical if mode else theme_name
+
+        if field is None:
+            return metadata
+
+        if field not in metadata:
+            raise ValueError(
+                f"Theme metadata field '{field}' not found for '{theme_variant}'"
+            )
+        return metadata[field]
 
     def get_syntax_color_scheme(self, palette):
         """
@@ -378,41 +435,28 @@ class ThemeManager:
         theme_module = importlib.import_module(theme_name)
         theme_path = Path(theme_module.__path__[0])
 
-        # Construct stylesheet paths.
-        #
-        # Newer spyder-themes versions ship qtpy-based resource modules named
-        # ``darkstyle_rc.py`` and ``lightstyle_rc.py``. Keep support for older
-        # ``pyqt5_*_rc.py`` files as a fallback for compatibility.
+        # Stylesheet and qtpy-based resource modules from spyder-themes
+        # (``darkstyle_rc.py`` / ``lightstyle_rc.py``).
         if ui_mode == "dark":
             qss_file = theme_path / "dark" / "darkstyle.qss"
-            rc_candidates = [
-                theme_path / "dark" / "darkstyle_rc.py",
-                theme_path / "dark" / "pyqt5_darkstyle_rc.py",
-            ]
+            rc_file = theme_path / "dark" / "darkstyle_rc.py"
         else:
             qss_file = theme_path / "light" / "lightstyle.qss"
-            rc_candidates = [
-                theme_path / "light" / "lightstyle_rc.py",
-                theme_path / "light" / "pyqt5_lightstyle_rc.py",
-            ]
+            rc_file = theme_path / "light" / "lightstyle_rc.py"
 
         if not qss_file.exists():
             raise ValueError(
                 f"Stylesheet not found for theme '{theme_name}' in {ui_mode} mode"
             )
 
-        rc_file = next((candidate for candidate in rc_candidates if candidate.exists()), None)
-        if rc_file is None:
-            import logging
-
-            logger = logging.getLogger(__name__)
+        if not rc_file.exists():
             logger.debug(
-                "No theme resource module found for '%s' (%s mode). "
-                "Checked: %s",
+                "No theme resource module found for '%s' (%s mode) at %s",
                 theme_name,
                 ui_mode,
-                ", ".join(str(candidate) for candidate in rc_candidates),
+                rc_file,
             )
+            rc_file = None
 
         # Load the resources if they exist, but defer loading until Qt is initialized
         # Loading resources before Qt is ready can cause segfaults during Qt initialization
