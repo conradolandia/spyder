@@ -23,10 +23,6 @@ from spyder.plugins.help.utils.sphinxify import CSS_PATH
 logger = logging.getLogger(__name__)
 
 
-# Local imports
-
-
-
 class ThemeManager:
     """Manager for Spyder's theming system."""
 
@@ -44,7 +40,6 @@ class ThemeManager:
         themes = []
 
         # List of theme packages to search
-        # Add more package names here as needed
         theme_packages = ["spyder_themes"]
 
         for package_name in theme_packages:
@@ -62,7 +57,7 @@ class ThemeManager:
                             ):
                                 full_theme_name = f"{package_name}.{theme_name}"
                                 try:
-                                    ThemeManager.get_theme_metadata(full_theme_name)
+                                    ThemeManager._load_theme_metadata(full_theme_name)
                                 except Exception as exc:
                                     logger.warning(
                                         "Ignoring theme '%s': invalid or missing metadata: %s",
@@ -82,18 +77,74 @@ class ThemeManager:
         return sorted(themes)
 
     @staticmethod
+    @lru_cache(maxsize=None)
+    def _theme_root_path(theme_name):
+        """Filesystem root of an installed theme package (importable module path)."""
+        theme_module = importlib.import_module(theme_name)
+        return Path(theme_module.__path__[0])
+
+    @staticmethod
     def get_theme_modes(theme_name):
-        """Get available UI modes by checking palette classes."""
-        try:
-            theme_module = importlib.import_module(theme_name)
-            modes = []
-            if hasattr(theme_module, "SpyderPaletteDark"):
-                modes.append("dark")
-            if hasattr(theme_module, "SpyderPaletteLight"):
-                modes.append("light")
-            return modes if modes else ["dark", "light"]
-        except ImportError:
-            return ["dark", "light"]
+        """
+        Get available UI modes for a theme.
+
+        ``theme.yaml`` must include a ``variants`` mapping with ``dark`` and/or
+        ``light`` set to ``true`` or ``false``. Only those two keys are allowed.
+        Each mode set to ``true`` must have the corresponding
+        ``SpyderPaletteDark`` or ``SpyderPaletteLight`` class on the theme module.
+        At least one variant must be enabled.
+        """
+        meta = ThemeManager._load_theme_metadata(theme_name)
+        theme_module = importlib.import_module(theme_name)
+
+        code_modes = []
+        if hasattr(theme_module, "SpyderPaletteDark"):
+            code_modes.append("dark")
+        if hasattr(theme_module, "SpyderPaletteLight"):
+            code_modes.append("light")
+
+        variants = meta.get("variants")
+        if variants is None:
+            raise ValueError(
+                f"Theme '{theme_name}': metadata must declare 'variants' "
+                f"(dark and light booleans)"
+            )
+        if not isinstance(variants, dict):
+            raise ValueError(
+                f"Theme '{theme_name}': metadata 'variants' must be a mapping"
+            )
+        unknown = [k for k in variants if k not in ("dark", "light")]
+        if unknown:
+            raise ValueError(
+                f"Theme '{theme_name}': metadata 'variants' has unknown keys "
+                f"{unknown!r}; only 'dark' and 'light' are allowed"
+            )
+        ordered = []
+        for mode in ("dark", "light"):
+            if mode not in variants:
+                continue
+            val = variants[mode]
+            if val is True:
+                if mode not in code_modes:
+                    raise ValueError(
+                        f"Theme '{theme_name}': metadata enables variant "
+                        f"'{mode}' but the corresponding palette class is not "
+                        f"defined"
+                    )
+                ordered.append(mode)
+            elif val is False:
+                continue
+            else:
+                raise ValueError(
+                    f"Theme '{theme_name}': metadata 'variants.{mode}' must be "
+                    f"true or false, got {val!r}"
+                )
+        if not ordered:
+            raise ValueError(
+                f"Theme '{theme_name}': metadata 'variants' must enable at least "
+                f"one of 'dark', 'light'"
+            )
+        return ordered
 
     @staticmethod
     def get_available_theme_variants():
@@ -146,14 +197,14 @@ class ThemeManager:
         str
             User-friendly display name (e.g., 'Dracula Dark')
         """
-        metadata = ThemeManager.get_theme_metadata(theme_variant)
-        theme_name = metadata.get("name")
-        if not theme_name:
+        meta = ThemeManager.get_theme_metadata(theme_variant)
+        if "display_name" not in meta:
             raise ValueError(
-                f"Theme metadata for '{theme_variant}' does not contain 'name'"
+                f"Theme metadata for '{theme_variant}' does not contain "
+                f"'display_name'"
             )
-
-        mode = metadata.get("mode")
+        theme_name = meta["display_name"]
+        mode = meta.get("mode")
         if mode:
             return f"{theme_name} ({str(mode).title()})"
 
@@ -180,8 +231,7 @@ class ThemeManager:
         ValueError
             If the file is missing or contains invalid metadata.
         """
-        theme_module = importlib.import_module(theme_name)
-        theme_path = Path(theme_module.__path__[0])
+        theme_path = ThemeManager._theme_root_path(theme_name)
         metadata_file = theme_path / "theme.yaml"
 
         if not metadata_file.exists():
@@ -227,6 +277,7 @@ class ThemeManager:
             theme_name = canonical
             mode = None
 
+        # Runtime keys (``theme``, ``mode``, ``id``) override YAML homonyms.
         metadata = dict(ThemeManager._load_theme_metadata(theme_name))
         metadata["theme"] = theme_name
         metadata["mode"] = mode
@@ -331,9 +382,6 @@ class ThemeManager:
         (package palette plus optional ``appearance`` overrides).
         """
         from spyder.config.manager import CONF
-        import logging
-
-        logger = logging.getLogger(__name__)
 
         # Remember the current theme to restore it after exporting all themes
         current_theme = self._current_theme
@@ -368,6 +416,8 @@ class ThemeManager:
         """Load theme using standard package import."""
         if ui_mode is None:
             ui_mode = "dark" if is_dark_interface() else "light"
+
+        ThemeManager._load_theme_metadata(theme_name)
 
         # Import theme module using full module path
         theme_module = importlib.import_module(theme_name)
@@ -431,9 +481,7 @@ class ThemeManager:
 
     def _load_stylesheet(self, theme_name, ui_mode):
         """Load the QSS stylesheet for a theme."""
-        # Get theme module path
-        theme_module = importlib.import_module(theme_name)
-        theme_path = Path(theme_module.__path__[0])
+        theme_path = ThemeManager._theme_root_path(theme_name)
 
         # Stylesheet and qtpy-based resource modules from spyder-themes
         # (``darkstyle_rc.py`` / ``lightstyle_rc.py``).
